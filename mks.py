@@ -1,0 +1,16 @@
+c = 2.99792458E8    # speed of light in a vacuum
+e = 1.602E-19       # elementary charge
+e_V = 1.602E-19     # electron volt
+m_p = 1.672E-27     # proton rest mass
+m_n = 1.675E-27     # neutron rest mass
+m_e = 9.109E-31     # electron rest mass
+G = 6.673E-11       # gravitational constant
+g = 9.81            # acceleration due to gravity on surface of Earth
+k = 1.380E-23       # Boltzmann constant
+h = 6.625E-34       # Planck constant
+thomp = 6.65E-29    # cross-section of Thompson scattering
+pc = 3.086E16       # pc
+Mpc = 3.086E22      # megaparsec
+mSun = 1.9891E30    # mass of the sun
+erg = 1E-7          # joule/erg
+lSun = 3.826E26     # joules/s
