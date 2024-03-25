@@ -274,21 +274,25 @@ def pull_spec_data():
     #        print(npix[i]) #if npix less than 2, just cut it from the sample
 
     combinedFlux = oII6Flux + oII9Flux
-    combinedLum = []
-    usefulRedshift = []
-    usefulTypes = []
 
-    tracers = ['BGS', 'ELG', 'LRG', 'QSO', 'STAR', 'SCND']
+    dataNum = len(combinedFlux)
+
+    combinedLum = np.zeros(dataNum)
+    #usefulRedshift = np.zeros(dataNum)
+    #usefulTypes = np.zeros(dataNum)
+
+    tracers = ['BGS', 'ELG', 'LRG', 'QSO']#, 'STAR', 'SCND']
 
 
     print("calculating luminosities...")
     t = time.time()
     lastFullSecElapsed = int(time.time()-t)
-    for i in range(len(combinedFlux)//10):
+
+    for i in range(len(combinedFlux)):
         #print(combinedFlux[i], redshift[i])
         if npix[i] > 1:
-            combinedLum.append(get_lum(float(combinedFlux[i]),float(redshift[i])))
-            usefulRedshift.append(redshift[i])
+            combinedLum[i] = get_lum(float(combinedFlux[i]),float(redshift[i]))
+            #usefulRedshift[i] = redshift[i]
 
     ### The rest of this is just for displaying progress ###
             elapsed = time.time() - t
@@ -303,23 +307,31 @@ def pull_spec_data():
             print('\r' + trString, end='', flush=True)
     tTime = time.time() - t
     print(" done, ", int(tTime)//60, "minutes and ", int(tTime)%60, "seconds elapsed.")
-
     ### Up to here ###
 
     print("making plot...")
 
-
+    rsMax = 0
     for tracer in tracers:
-        rsPlot = usefulRedshift[fastSpecTable[f'IS{tracer}']]
+        #print(fastSpecTable[f'IS{tracer}'])
+        #print(min(combinedLum[fastSpecTable[f'IS{tracer}']]))
+
         lumPlot = combinedLum[fastSpecTable[f'IS{tracer}']]
-        plt.plot(rsPlot, lumPlot, '.', label=f'{tracer}')
+        rsPlot = redshift[fastSpecTable[f'IS{tracer}']][lumPlot > 0]
+        lumPlot = lumPlot[lumPlot > 0]
+        #print(f'for{tracer}:')
+        #print(f'min:{min(lumPlot)}')
+        #if max(rsPlot) > rsMax:
+        #    rsMax = max(rsPlot)
+        #print(f'rsMax: {rsMax}')
+        plt.plot(rsPlot, lumPlot, '.', alpha=0.4, label=f'{tracer}')
     #plt.plot(usefulRedshift, combinedLum,'.')
     plt.yscale("log")
     plt.xlabel("Redshift")
     plt.ylabel("[OII] Luminosity (erg/s)")
     plt.legend()
+    #plt.xlim(0, rsMax)
     plt.title("[OII] Luminosity redshift dependence")
-
     plt.show()
 
 
