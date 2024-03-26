@@ -240,7 +240,7 @@ def spec_type_in_fsf():
     return fsfData
 
 
-def pull_spec_data():
+def pull_spec_data(sepPlot=False, scatter=False, hist=False):
 
     """
     #### Making directory refs and reading tables #### (Don't use this anymore)
@@ -277,62 +277,101 @@ def pull_spec_data():
 
     dataNum = len(combinedFlux)
 
-    combinedLum = np.zeros(dataNum)
-    #usefulRedshift = np.zeros(dataNum)
-    #usefulTypes = np.zeros(dataNum)
 
     tracers = ['BGS', 'ELG', 'LRG', 'QSO']#, 'STAR', 'SCND']
+    surveyFilter = fastSpecTable['SURVEY'] == 'sv3'
 
 
-    print("calculating luminosities...")
     t = time.time()
     lastFullSecElapsed = int(time.time()-t)
 
-    for i in range(len(combinedFlux)):
-        #print(combinedFlux[i], redshift[i])
-        if npix[i] > 1:
-            combinedLum[i] = get_lum(float(combinedFlux[i]),float(redshift[i]))
-            #usefulRedshift[i] = redshift[i]
-
-    ### The rest of this is just for displaying progress ###
-            elapsed = time.time() - t
-            fullSecElapsed = int(elapsed)
-        if fullSecElapsed > lastFullSecElapsed:
-            lastFullSecElapsed = fullSecElapsed
-            percent = 100*(i+1)/(len(combinedFlux))
-            #elapsed = time.time() - t
-            totalTime = elapsed/(percent/100)
-            remaining = totalTime - elapsed
-            trString = str(int(percent)) + "% complete, approx " + str(int(remaining)//60) + "m" + str(int(remaining)%60) + "s remaining..."
-            print('\r' + trString, end='', flush=True)
-    tTime = time.time() - t
-    print(" done, ", int(tTime)//60, "minutes and ", int(tTime)%60, "seconds elapsed.")
-    ### Up to here ###
-
-    print("making plot...")
-
-    rsMax = 0
+    totalNum = 0
     for tracer in tracers:
-        #print(fastSpecTable[f'IS{tracer}'])
-        #print(min(combinedLum[fastSpecTable[f'IS{tracer}']]))
+        traceFilter = fastSpecTable[f'IS{tracer}']
+        filters = np.logical_and(traceFilter, surveyFilter)
+        totalNum += len(combinedFlux[filters])
+    print(f"{totalNum} objects to calculate for {len(tracers)} tracers...")
+    elpsNum = 0
+    i = 0
 
-        lumPlot = combinedLum[fastSpecTable[f'IS{tracer}']]
-        rsPlot = redshift[fastSpecTable[f'IS{tracer}']][lumPlot > 0]
-        lumPlot = lumPlot[lumPlot > 0]
-        #print(f'for{tracer}:')
-        #print(f'min:{min(lumPlot)}')
-        #if max(rsPlot) > rsMax:
-        #    rsMax = max(rsPlot)
-        #print(f'rsMax: {rsMax}')
-        plt.plot(rsPlot, lumPlot, '.', alpha=0.4, label=f'{tracer}')
-    #plt.plot(usefulRedshift, combinedLum,'.')
-    plt.yscale("log")
-    plt.xlabel("Redshift")
-    plt.ylabel("[OII] Luminosity (erg/s)")
-    plt.legend()
-    #plt.xlim(0, rsMax)
-    plt.title("[OII] Luminosity redshift dependence")
-    plt.show()
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    colors = prop_cycle.by_key()['color']
+
+    for colr, tracer in enumerate(tracers):
+
+        # Filtering for the desired tracer and survey
+
+        traceFilter = fastSpecTable[f'IS{tracer}']              # create mask for only the desired tracer
+        filters = np.logical_and(traceFilter, surveyFilter)     # combine with the survey mask
+
+        trcrString = f"Calculating luminosities for {tracer}... "
+        dataNum = len(combinedFlux[filters])
+        combinedLum = np.zeros(dataNum)
+        tracerFlux = combinedFlux[filters]
+        tracerRedshift = redshift[filters]
+        npixTracer = npix[filters]
+        elpsNum += i
+
+
+        # Calculating the luminosity
+        for i in range(dataNum):
+            if npixTracer[i] > 1:
+                combinedLum[i] = get_lum(float(tracerFlux[i]),float(tracerRedshift[i]))
+
+
+        # Displaying progress through the set to check for hanging
+                elapsed = time.time() - t
+                fullSecElapsed = int(elapsed)
+            if fullSecElapsed > lastFullSecElapsed:
+                lastFullSecElapsed = fullSecElapsed
+                percent = 100*(elpsNum+i+1)/(totalNum)
+                #elapsed = time.time() - t
+                totalTime = elapsed/(percent/100)
+                remaining = totalTime - elapsed
+                trString = str(int(percent)) + "% complete, approx " + str(int(remaining)//60) + "m" + str(int(remaining)%60) + "s remaining..."
+                print('\r' + trcrString + trString, end='', flush=True)
+
+        # Filtering out luminosities that could not be determined (set to zero)
+        rsPlot = redshift[filters][combinedLum> 0]
+        lumPlot = combinedLum[combinedLum > 0]
+
+        # Plotting the luminosities
+        if scatter:
+            plt.plot(rsPlot, np.log10(lumPlot), '.', alpha=0.4, label=f'{tracer}, {len(lumPlot)} objects', color=colors[colr])
+
+            # If seplot, make separate plots for each tracer. Otherwise, show all on one plot.
+            if sepPlot:
+                plt.xlabel("Redshift")
+                plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+                plt.legend()
+                plt.title("[OII] Luminosity redshift dependence in sv3")
+                plt.savefig(f'oii luminosity for {tracer} vs redshift.png')
+                plt.show()
+        if hist:
+            plt.hist(np.log10(lumPlot), bins=range(35,45), label=f'{tracer}', histtype='bar', stacked=True)
+            plt.xlabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+            plt.title('Histogram of [OII] luminosities')
+            plt.savefig(f'histogram of oii luminosity stacked {tracer}.png')
+            plt.legend()
+            plt.show()
+    # Display total time elapsed
+    tTime = time.time() - t
+    print("done, ", int(tTime)//60, "minutes and ", int(tTime)%60, "seconds elapsed.")
+
+    if scatter:
+        if not sepPlot:
+            plt.xlabel("Redshift")
+            plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+            plt.legend()
+            plt.title("[OII] Luminosity redshift dependence in sv3")
+            plt.savefig(f'oii luminosity vs redshift.png')
+            plt.show()
+    if hist:
+        plt.xlabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+        plt.title('Histogram of [OII] luminosities')
+        plt.savefig('histogram of oii luminosity stacked.png')
+        plt.legend()
+        plt.show()
 
 
 
@@ -364,7 +403,7 @@ def check_rows():
 if __name__ == '__main__':
     #check_files('27257')
     #zcat = spec_type()
-    pull_spec_data()
+    pull_spec_data(hist=True)
     #check_rows()
     #fsfData = spec_type_in_fsf()
     #print(fsfData['ISBGS'][:20])
