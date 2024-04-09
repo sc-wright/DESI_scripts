@@ -26,6 +26,7 @@ from desitarget.sv2.sv2_targetmask import desi_mask as sv2mask
 from desitarget.sv3.sv3_targetmask import desi_mask as sv3mask
 from desitarget.targetmask import desi_mask as specialmask
 
+
 def spec_type():
 
     desi_masks = {}
@@ -127,6 +128,7 @@ def spec_type():
     #    print(zcat[f'IS{tracer}'][:10])
 
     return zcat
+
 
 def spec_type_in_fsf():
 
@@ -233,13 +235,55 @@ def spec_type_in_fsf():
         if np.sum(fsfData[col] < 0) == 0:
             fsfData[col] = Table.Column(data=fsfData[col], name=col, dtype=bool)
 
-    #print(zCatTable['SUBTYPE'][:10])
-    #for tracer in tracers:
-    #    print(zcat[f'IS{tracer}'][:10])
 
-    return fsfData
+    return fsfData, fsfMeta
 
 
+def add_lum_to_table(table):
+    #table should be the fsf table
+
+    table.add_column(Table.Column(data=-1 * np.ones(len(table)), dtype=float, name=f"OII_COMBINED_LUMINOSITY_LOG"))
+
+    oII6Flux = np.array(table['OII_3726_FLUX'])
+    oII9Flux = np.array(table['OII_3729_FLUX'])
+    oIICombinedFlux = oII6Flux + oII9Flux
+    redshift = np.array(table['Z'])
+    npix = np.array(table['OII_3726_NPIX']) + np.array(table['OII_3729_NPIX'])
+    dataLength = len(oIICombinedFlux)
+
+
+    t = time.time()
+    lastFullSecElapsed = int(time.time()-t)
+
+    for i in range(dataLength):
+        if npix[i] > 1:
+            flux = oIICombinedFlux[i]
+            if flux > 0:
+                oIILum = np.log10(get_lum(flux, redshift[i]))
+                table['OII_COMBINED_LUMINOSITY_LOG'][i] = oIILum
+
+        # Displaying progress through the set to check for hanging
+        elapsed = time.time() - t
+        fullSecElapsed = int(elapsed)
+        if fullSecElapsed > lastFullSecElapsed:
+            lastFullSecElapsed = fullSecElapsed
+            percent = 100 * (i + 1) / (dataLength)
+            totalTime = elapsed / (percent / 100)
+            remaining = totalTime - elapsed
+            trString = ("Calculating [OII] luminosity, " + str(int(percent)) + "% complete. approx "
+                        + str(int(remaining) // 60) + "m" + str(int(remaining) % 60) + "s remaining...")
+            print('\r' + trString, end='', flush=True)
+
+    my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
+    specprod = 'fuji'
+    fssCatalogsDir = f'{my_dir}/public/edr/vac/edr/fastspecfit/{specprod}/v3.2/catalogs'
+
+    #print("Writing table...")
+    #table.write(fssCatalogsDir + "/fastspec-fuji-data-processed.fits")
+
+
+
+#THIS FUNCTION IS DEPRECATED. USE THE OTHER FUNCTIONS IN COMBINATION.
 def pull_spec_data(sepPlot=False, scatter=False, hist=False):
 
     """
@@ -374,6 +418,203 @@ def pull_spec_data(sepPlot=False, scatter=False, hist=False):
         plt.show()
 
 
+def make_BGS_filter(table, metaTable=None):
+    # creates a binary mask to select objects in sv3 with a calculated OII luminosity of type tracer
+    surveyFilter = table['SURVEY'] == 'sv3'
+    traceFilter = table[f'ISBGS']  # create mask for only the desired tracer
+    lumFilter = table['OII_COMBINED_LUMINOSITY_LOG'] > 0
+    zFilter = table['Z'] < 0.8
+    #zOKFilter = metaTable['ZWARN']
+
+    int1Filter = np.logical_and(traceFilter, surveyFilter)  # combine with the survey mask
+    int2Filter = np.logical_and(int1Filter, zFilter)
+    finalFilter = np.logical_and(int2Filter, lumFilter)
+
+    return finalFilter
+
+
+def plot_lum_vs_redshift(fsfData):
+    print("Plotting luminosity vs redshift...")
+
+    BGSFilter = make_BGS_filter(fsfData)
+
+    lum = fsfData['OII_COMBINED_LUMINOSITY_LOG'][BGSFilter]
+    redshift = fsfData['Z'][BGSFilter]
+    plt.plot(redshift, lum, '.', alpha = 0.3)
+    plt.xlabel("Redshift")
+    plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+    plt.title("[OII] luminosity redshift dependence for BGS in sv3")
+    plt.savefig(f'BGS oii luminosity vs redshift.png')
+    plt.show()
+
+def plot_lum_redshift_snr_color(fsfData):
+    print("Plotting SNR limit...")
+    BGSFilter = make_BGS_filter(fsfData)
+
+    lum = fsfData['OII_COMBINED_LUMINOSITY_LOG'][BGSFilter]
+    redshift = fsfData['Z'][BGSFilter]
+    snr = calculate_oii_snr(fsfData)[BGSFilter]
+
+    plt.plot(redshift[snr>3], lum[snr>3], '.', alpha=0.3)
+    plt.plot(redshift[snr < 3], lum[snr < 3], '.', alpha=0.3)
+    plt.xlabel("Redshift")
+    plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+    plt.title("[OII] luminosity redshift dependence for BGS in sv3")
+    plt.savefig(f'BGS oii luminosity vs redshift w snr.png')
+    plt.show()
+
+def plot_lum_redshift_chi2(fsfData):
+    BGSFilter = make_BGS_filter(fsfData) # BGS sources at z < 0.8
+    chiFlagFilter = fsfData['RCHI2_LINE'] > 2 # sources with high chi2
+    chiOKFilter = fsfData['RCHI2_LINE'] <= 2 #sources with low chi2
+    chiFlagFilter = np.logical_and(BGSFilter, chiFlagFilter)
+    chiOKFilter = np.logical_and(BGSFilter, chiOKFilter)
+
+    lum_chiFlag = fsfData['OII_COMBINED_LUMINOSITY_LOG'][chiFlagFilter]
+    redshift_chiFlag = fsfData['Z'][chiFlagFilter]
+
+    lum_chiOK = fsfData['OII_COMBINED_LUMINOSITY_LOG'][chiOKFilter]
+    redshift_chiFOK = fsfData['Z'][chiOKFilter]
+
+    plt.scatter(redshift_chiFlag, lum_chiFlag, alpha=0.3, label=r"$\chi^2 > 2$")
+    plt.scatter(redshift_chiFOK, lum_chiOK, alpha=0.3, label=r"$\chi^2 \leq 2$")
+
+    plt.legend()
+    plt.xlabel("Redshift")
+    plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+    plt.title("[OII] luminosity redshift dependence for BGS in sv3")
+    plt.savefig(f'BGS oii luminosity vs redshift w chi2.png')
+    plt.show()
+
+
+
+def calculate_oii_snr(fsfData):
+
+    noise1 = np.array(fsfData['OII_3726_AMP_IVAR'])
+    noise1 = np.sqrt(1 / noise1)
+    noise2 = np.array(fsfData['OII_3729_AMP_IVAR'])
+    noise2 = np.sqrt(1 / noise2)
+    noise = np.sqrt(noise1**2 + noise2**2)
+
+    oII6Flux = np.array(fsfData['OII_3726_FLUX'])
+    oII9Flux = np.array(fsfData['OII_3729_FLUX'])
+    oIICombinedFlux = oII6Flux + oII9Flux
+
+    snr = oIICombinedFlux/noise
+
+    return snr
+
+def plot_lum_stellar_mass(fsfData):
+    print("Plotting luminosity vs stellar mass...")
+
+    # Making filters:
+    BGSFilter = make_BGS_filter(fsfData) # BGS sources at z < 0.8
+    chiFlagFilter = fsfData['RCHI2_LINE'] > 2 # sources with high chi2
+    chiOKFilter = fsfData['RCHI2_LINE'] <= 2 #sources with low chi2
+    chiFlagFilter = np.logical_and(BGSFilter, chiFlagFilter)
+    chiOKFilter = np.logical_and(BGSFilter, chiOKFilter)
+
+    lum_chiFlag = fsfData['OII_COMBINED_LUMINOSITY_LOG'][chiFlagFilter]
+    stellar_mass_chiFlag = fsfData['LOGMSTAR'][chiFlagFilter]
+    redshift_chiFlag = fsfData['Z'][chiFlagFilter]
+
+    lum_chiOK = fsfData['OII_COMBINED_LUMINOSITY_LOG'][chiOKFilter]
+    stellar_mass_chiOK = fsfData['LOGMSTAR'][chiOKFilter]
+    redshift_chiFOK = fsfData['Z'][chiOKFilter]
+
+
+    plt.scatter(stellar_mass_chiFlag, lum_chiFlag, alpha=0.3, label=r"$\chi^2 > 2$")#, c=redshift_chiFlag, marker=".", cmap="bwr", label=r"$\chi^2 < 2$")
+    plt.scatter(stellar_mass_chiOK, lum_chiOK, alpha = 0.3, label=r"$\chi^2 \leq 2$")#, c = redshift_chiFOK, marker="v", cmap="bwr", label=r"$\chi^2 \geq 2$")
+    #plt.colorbar()
+    plt.legend()
+    plt.xlabel(r'$\log{M_\star/M_\odot}$')
+    plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+    plt.title("[OII] luminosity stellar mass dependence for BGS in sv3")
+    plt.savefig(f'BGS oii luminosity vs stellar mass w color w chi2.png')
+    plt.show()
+
+def plot_lum_stellar_mass_redshift_color(fsfData):
+    print("Plotting luminosity vs stellar mass...")
+
+    # Making filters:
+    BGSFilter = make_BGS_filter(fsfData) # BGS sources at z < 0.8
+    lum = fsfData['OII_COMBINED_LUMINOSITY_LOG'][BGSFilter]
+    stellar_mass = fsfData['LOGMSTAR'][BGSFilter]
+    redshift = fsfData['Z'][BGSFilter]
+
+    plt.scatter(stellar_mass, lum, alpha=0.3, c=redshift, marker=".", cmap="bwr")
+    plt.colorbar()
+    #plt.legend()
+    plt.xlabel(r'$\log{M_\star/M_\odot}$')
+    plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+    plt.title("[OII] luminosity stellar mass dependence for BGS in sv3")
+    plt.savefig(f'BGS oii luminosity vs stellar mass w color.png')
+    plt.show()
+
+
+def plot_lum_stellar_mass_redshift_color_zslice(fsfData):
+    print("Plotting luminosity vs stellar mass...")
+
+    # Making filters:
+    BGSFilter = make_BGS_filter(fsfData) # BGS sources at z < 0.8
+
+
+    sliceSize = .1
+    for zSlice in np.arange(0,0.8,sliceSize):
+        print("Plotting histogram of luminosity (z slice z={:.1f})...".format(zSlice))
+        newFilterLayer = np.logical_and(fsfData['Z'] >= zSlice, fsfData['Z'] < (zSlice + sliceSize))
+        zSlicedFilter = np.logical_and(newFilterLayer, BGSFilter)
+
+        lum = fsfData['OII_COMBINED_LUMINOSITY_LOG'][zSlicedFilter]
+        stellar_mass = fsfData['LOGMSTAR'][zSlicedFilter]
+        redshift = fsfData['Z'][zSlicedFilter]
+
+        plt.scatter(stellar_mass, lum, alpha=0.3, c=redshift, cmap="bwr")
+        plt.colorbar()
+        #plt.legend()
+        plt.xlabel(r'$\log{M_\star/M_\odot}$')
+        plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+        plt.title("[OII] luminosity stellar mass dependence for BGS in sv3 for {:.1f}".format(zSlice) + r" $\leq$ z < {:.1f}".format(zSlice + sliceSize))
+        plt.savefig('BGS oii luminosity vs stellar mass w color z={:.1f}.png'.format(zSlice))
+        plt.show()
+
+
+
+def plot_lum_redshift_slice(fsfData):
+    BGSFilter = make_BGS_filter(fsfData)
+    intFilt = fsfData['OII_COMBINED_LUMINOSITY_LOG'] > 37
+    BGSFilter = np.logical_and(intFilt,BGSFilter)
+    sliceSize = .1
+    for zSlice in np.arange(0,0.8,sliceSize):
+        print("Plotting histogram of luminosity (z slice z={:.1f})...".format(zSlice))
+        newFilterLayer = np.logical_and(fsfData['Z'] >= zSlice, fsfData['Z'] < (zSlice + sliceSize))
+        zSlicedFilter = np.logical_and(newFilterLayer, BGSFilter)
+        lum = fsfData['OII_COMBINED_LUMINOSITY_LOG'][zSlicedFilter]
+        plt.hist(lum,bins=40)
+        plt.xlabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+        #plt.xlim(left=37)
+        #plt.ylabel("Number")
+        plt.title(r"[OII] luminosity for {:.1f}".format(zSlice) + r" $\leq$ z < {:.1f}".format(zSlice + sliceSize))
+        plt.savefig('oii luminosity histogram z={:.1f}.png'.format(zSlice))
+        plt.show()
+
+
+    #filter = add_filter_layer(BGSFilter)
+
+def plot_lum_hist(fsfData):
+    print("Plotting histogram of luminosity...")
+    BGSFilter = make_BGS_filter(fsfData)
+    lum = fsfData['OII_COMBINED_LUMINOSITY_LOG'][BGSFilter]
+    plt.hist(lum,bins=30)
+    plt.xlabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+    plt.ylabel("Number")
+    plt.title("[OII] luminosity")
+    plt.savefig(f'oii luminosity histogram.png')
+    plt.show()
+
+
+
+
 
 def check_rows():
     my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
@@ -398,14 +639,38 @@ def check_rows():
     print(len(zcat))
 
 
-
-
-if __name__ == '__main__':
+def main():
     #check_files('27257')
     #zcat = spec_type()
-    pull_spec_data(hist=True)
+    #pull_spec_data(hist=True)
     #check_rows()
-    #fsfData = spec_type_in_fsf()
+    try:
+        my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
+        specprod = 'fuji'
+        fssCatalogsDir = f'{my_dir}/public/edr/vac/edr/fastspecfit/{specprod}/v3.2/catalogs'
+
+        print("reading in table...")
+        fsfData = Table.read(f'{fssCatalogsDir}/fastspec-fuji-data-processed.fits')
+    except:
+        print("FITS with pre-calculated values not found, generating new file...")
+        fsfData, fsfMeta = spec_type_in_fsf()
+        add_lum_to_table(fsfData)
+    plot_lum_vs_redshift(fsfData)
+    plot_lum_redshift_snr_color(fsfData)
+    plot_lum_redshift_chi2(fsfData)
+    plot_lum_redshift_slice(fsfData)
+    plot_lum_stellar_mass(fsfData)
+    plot_lum_stellar_mass_redshift_color(fsfData)
+    plot_lum_stellar_mass_redshift_color_zslice(fsfData)
+
+
+
+    #plot_lum_hist(fsfData)
+
+
     #print(fsfData['ISBGS'][:20])
     #print(fsfData['ISELG'][:20])
     #print(fsfData['TARGETID'][fsfData['ISBGS']])
+
+if __name__ == '__main__':
+    main()
