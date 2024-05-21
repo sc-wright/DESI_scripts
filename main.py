@@ -274,13 +274,39 @@ def add_lum_to_table(table):
                         + str(int(remaining) // 60) + "m" + str(int(remaining) % 60) + "s remaining...")
             print('\r' + trString, end='', flush=True)
 
+
+    #write_table_to_disk(table)
+
+def write_table_to_disk(table):
+
     my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
     specprod = 'fuji'
     fssCatalogsDir = f'{my_dir}/public/edr/vac/edr/fastspecfit/{specprod}/v3.2/catalogs'
 
-    #print("Writing table...")
-    #table.write(fssCatalogsDir + "/fastspec-fuji-data-processed.fits")
+    ogname = fssCatalogsDir + "/fastspec-fuji-data-processed.fits"
+    bakname = ogname + ".bak"
 
+    print("Writing table...")
+    try:
+        print("renaming old table...")
+        os.rename(ogname, bakname)
+        print("writing new table to disk...")
+        table.write(fssCatalogsDir + "/fastspec-fuji-data-processed.fits")
+    except:
+        print("old table not found, writing tale...")
+        table.write(fssCatalogsDir + "/fastspec-fuji-data-processed.fits")
+
+
+def add_col_to_table(table, colstr, data):
+
+    print(f"Adding column {colstr} to table...")
+
+    table.add_column(Table.Column(data=-1 * np.ones(len(table)), dtype=float, name=colstr))
+
+    for i, v in enumerate(data):
+        table[colstr][i] = v
+
+    #write_table_to_disk(table)
 
 
 #THIS FUNCTION IS DEPRECATED. USE THE OTHER FUNCTIONS IN COMBINATION.
@@ -477,7 +503,7 @@ def plot_lum_redshift_chi2(fsfData):
     redshift_chiFOK = fsfData['Z'][chiOKFilter]
 
     plt.scatter(redshift_chiFlag, lum_chiFlag, alpha=0.3, label=r"$\chi^2 > 2$")
-    plt.scatter(redshift_chiFOK, lum_chiOK, alpha=0.3, label=r"$\chi^2 \leq 2$")
+    #plt.scatter(redshift_chiFOK, lum_chiOK, alpha=0.3, label=r"$\chi^2 \leq 2$")
 
     plt.legend()
     plt.xlabel("Redshift")
@@ -524,7 +550,7 @@ def plot_lum_stellar_mass(fsfData):
 
 
     plt.scatter(stellar_mass_chiFlag, lum_chiFlag, alpha=0.3, label=r"$\chi^2 > 2$")#, c=redshift_chiFlag, marker=".", cmap="bwr", label=r"$\chi^2 < 2$")
-    plt.scatter(stellar_mass_chiOK, lum_chiOK, alpha = 0.3, label=r"$\chi^2 \leq 2$")#, c = redshift_chiFOK, marker="v", cmap="bwr", label=r"$\chi^2 \geq 2$")
+    #plt.scatter(stellar_mass_chiOK, lum_chiOK, alpha = 0.3, label=r"$\chi^2 \leq 2$")#, c = redshift_chiFOK, marker="v", cmap="bwr", label=r"$\chi^2 \geq 2$")
     #plt.colorbar()
     plt.legend()
     plt.xlabel(r'$\log{M_\star/M_\odot}$')
@@ -532,6 +558,7 @@ def plot_lum_stellar_mass(fsfData):
     plt.title("[OII] luminosity stellar mass dependence for BGS in sv3")
     plt.savefig(f'BGS oii luminosity vs stellar mass w color w chi2.png')
     plt.show()
+
 
 def plot_lum_stellar_mass_redshift_color(fsfData):
     print("Plotting luminosity vs stellar mass...")
@@ -543,8 +570,10 @@ def plot_lum_stellar_mass_redshift_color(fsfData):
     redshift = fsfData['Z'][BGSFilter]
 
     plt.scatter(stellar_mass, lum, alpha=0.3, c=redshift, marker=".", cmap="bwr")
-    plt.colorbar()
+    plt.colorbar(label="z")
     #plt.legend()
+    plt.xlim(4.6, 12.5)
+    plt.ylim(34, 43)
     plt.xlabel(r'$\log{M_\star/M_\odot}$')
     plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
     plt.title("[OII] luminosity stellar mass dependence for BGS in sv3")
@@ -570,19 +599,20 @@ def plot_lum_stellar_mass_redshift_color_zslice(fsfData):
         redshift = fsfData['Z'][zSlicedFilter]
 
         plt.scatter(stellar_mass, lum, alpha=0.3, c=redshift, cmap="bwr")
-        plt.colorbar()
+        plt.colorbar(label="z")
         #plt.legend()
+        plt.xlim(4.6, 12.5)
+        plt.ylim(34, 43)
         plt.xlabel(r'$\log{M_\star/M_\odot}$')
         plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
-        plt.title("[OII] luminosity stellar mass dependence for BGS in sv3 for {:.1f}".format(zSlice) + r" $\leq$ z < {:.1f}".format(zSlice + sliceSize))
+        plt.title("[OII] luminosity stellar mass dependence\nfor BGS in sv3 for {:.1f}".format(zSlice) + r" $\leq$ z < {:.1f}".format(zSlice + sliceSize))
         plt.savefig('BGS oii luminosity vs stellar mass w color z={:.1f}.png'.format(zSlice))
         plt.show()
 
 
-
 def plot_lum_redshift_slice(fsfData):
     BGSFilter = make_BGS_filter(fsfData)
-    intFilt = fsfData['OII_COMBINED_LUMINOSITY_LOG'] > 37
+    intFilt = fsfData['OII_COMBINED_LUMINOSITY_LOG'] > 34
     BGSFilter = np.logical_and(intFilt,BGSFilter)
     sliceSize = .1
     for zSlice in np.arange(0,0.8,sliceSize):
@@ -592,7 +622,9 @@ def plot_lum_redshift_slice(fsfData):
         lum = fsfData['OII_COMBINED_LUMINOSITY_LOG'][zSlicedFilter]
         plt.hist(lum,bins=40)
         plt.xlabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
-        #plt.xlim(left=37)
+        plt.xlim(34, 43)
+        plt.ylim(1,2E4)
+        plt.yscale('log')
         #plt.ylabel("Number")
         plt.title(r"[OII] luminosity for {:.1f}".format(zSlice) + r" $\leq$ z < {:.1f}".format(zSlice + sliceSize))
         plt.savefig('oii luminosity histogram z={:.1f}.png'.format(zSlice))
@@ -600,6 +632,7 @@ def plot_lum_redshift_slice(fsfData):
 
 
     #filter = add_filter_layer(BGSFilter)
+
 
 def plot_lum_hist(fsfData):
     print("Plotting histogram of luminosity...")
@@ -613,7 +646,42 @@ def plot_lum_hist(fsfData):
     plt.show()
 
 
+def plot_lum_snr(fsfData, redslice=False):
+    # Making filters:
+    BGSFilter = make_BGS_filter(fsfData) # BGS sources at z < 0.8
 
+    if redslice:
+        sliceSize = .1
+    else:
+        sliceSize = .8
+    for zSlice in np.arange(0,0.8,sliceSize):
+        print("Plotting lum vs snr (z slice z={:.1f})...".format(zSlice))
+        newFilterLayer = np.logical_and(fsfData['Z'] >= zSlice, fsfData['Z'] < (zSlice + sliceSize))
+        zSlicedFilter = np.logical_and(newFilterLayer, BGSFilter)
+
+        lum = fsfData['OII_COMBINED_LUMINOSITY_LOG'][zSlicedFilter]
+        snr = fsfData['OII_SUMMED_SNR'][zSlicedFilter]
+        redshift = fsfData['Z'][zSlicedFilter]
+
+        SNRgt3Flag = snr>3
+        nSNRgt3 = sum(SNRgt3Flag)
+        print(f"# with SNR > 3: {nSNRgt3}")
+
+        SNRle3Flag = snr <= 3
+        nSNRle3 = sum(SNRle3Flag)
+        print(f"# with SNR <= 3: {nSNRle3}")
+
+        plt.scatter(lum, snr, alpha=0.3, c=redshift, cmap="bwr")
+        plt.colorbar(label="z")
+        #plt.legend()
+        plt.xlim(37,42.5)
+        plt.ylim(0.1,50)
+        plt.yscale('log')
+        plt.ylabel(r'SNR($L_{[OII]}$)')
+        plt.xlabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+        plt.title("[OII] luminosity vs SNR\nfor BGS in sv3 for {:.1f}".format(zSlice) + r" $\leq$ z < {:.1f}".format(zSlice + sliceSize))
+        plt.savefig('BGS oii luminosity vs snr for z={:.1f}.png'.format(zSlice))
+        plt.show()
 
 
 def check_rows():
@@ -644,6 +712,7 @@ def main():
     #zcat = spec_type()
     #pull_spec_data(hist=True)
     #check_rows()
+    """
     try:
         my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
         specprod = 'fuji'
@@ -655,13 +724,23 @@ def main():
         print("FITS with pre-calculated values not found, generating new file...")
         fsfData, fsfMeta = spec_type_in_fsf()
         add_lum_to_table(fsfData)
-    plot_lum_vs_redshift(fsfData)
-    plot_lum_redshift_snr_color(fsfData)
-    plot_lum_redshift_chi2(fsfData)
-    plot_lum_redshift_slice(fsfData)
-    plot_lum_stellar_mass(fsfData)
-    plot_lum_stellar_mass_redshift_color(fsfData)
-    plot_lum_stellar_mass_redshift_color_zslice(fsfData)
+        snr = calculate_oii_snr(fsfData)
+        add_col_to_table(fsfData, "OII_SUMMED_SNR", snr)
+        write_table_to_disk(fsfData)
+    """
+
+    spec_type_in_fsf()
+
+    #plot_lum_vs_redshift(fsfData)
+    #plot_lum_redshift_snr_color(fsfData)
+    #plot_lum_redshift_chi2(fsfData)
+    #plot_lum_redshift_slice(fsfData)
+    #plot_lum_stellar_mass(fsfData)
+    #plot_lum_stellar_mass_redshift_color(fsfData)
+    #plot_lum_stellar_mass_redshift_color_zslice(fsfData)
+
+    #plot_lum_snr(fsfData, redslice=True)
+    #plot_lum_snr(fsfData, redslice=False)
 
 
 
