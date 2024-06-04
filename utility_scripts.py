@@ -67,3 +67,7 @@ def get_lum(f, z):
     D_l = cosmo.luminosity_distance(z).cgs.value #this puts dL in cm
     f = f * 1E-17 #flux in erg/cm^2 now
     return f*4*np.pi*D_l**2
+
+
+def testfastqa():
+    os.system(f"fastqa --targetids ")

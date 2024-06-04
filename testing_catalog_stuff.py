@@ -16,27 +16,52 @@ import desispec.io
 from desitarget.sv3.sv3_targetmask import desi_mask, bgs_mask, scnd_mask  # SV3
 
 
-
+"""
 # Release directory path
 
 my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
 specprod = 'fuji'
 specprod_dir = f'{my_dir}/public/edr/spectro/redux/{specprod}'
+fastspec_dir = f'{my_dir}/public/edr/vac/edr/fastspecfit/{specprod}/v3.2'
 
-fujidata = Table( fitsio.read(os.path.join(specprod_dir, "zcatalog", "zall-pix-{}.fits".format(specprod))) )
+#fujidata = Table( fitsio.read(os.path.join(specprod_dir, "zcatalog", "zall-pix-{}.fits".format(specprod))) )
 
-is_sv3 = (fujidata["SURVEY"].astype(str).data == "sv3")
 
-is_prim_sv3 = (is_sv3 & fujidata["SV_PRIMARY"])
+hdul = fits.open(fastspec_dir + '/fastspec-fuji.fits')
+hdul.info()
+"""
 
-bgs_tgtmask  = desi_mask["BGS_ANY"]
-is_primary = fujidata["ZCAT_PRIMARY"]
+my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
+specprod = 'fuji'
+specprod_dir = f'{my_dir}/public/edr/spectro/redux/{specprod}'
+fsfCatalogsDir = f'{my_dir}/public/edr/vac/edr/fastspecfit/{specprod}/v3.2/catalogs'
+lssCatalogsDir = f'{my_dir}/public/edr/vac/edr/lss/v2.0/LSScats/full'
+print("reading in fsf table...")
+fsfData = Table.read(f'{fsfCatalogsDir}/fastspec-fuji-data-processed.fits')
+print("reading in lss table...")
+lssData = Table.read(f'{lssCatalogsDir}/BGS_ANY_full.dat.fits')
 
-desi_target = fujidata["DESI_TARGET"]
+# this is a list of fully unique tids
+bgs_tids = lssData['TARGETID'][lssData['ZWARN'] == 0]
 
-is_sv3_bgs = (desi_target & bgs_tgtmask != 0) | (fujidata["SV3_DESI_TARGET"] & bgs_tgtmask != 0)
+# select the targetids from the fsf catalog that are also in the BGS_ANY lss catalog
+bgs_mask = [i in bgs_tids for i in fsfData['TARGETID']]
+bgs_mask = np.logical_and(bgs_mask, fsfData['OII_COMBINED_LUMINOSITY_LOG'] > 0)
 
-is_bgs_sv3 = (fujidata["SV3_DESI_TARGET"] & bgs_tgtmask != 0)
 
-print(is_bgs_sv3)
-print(sum(is_bgs_sv3))
+#bgs_mask = fsfData['TARGETID'] in bgs_tids
+
+# not all the ones marked 'ISBGS' are included here - presumably these all got vetoed or had zwarn > 0
+masked_fsf = fsfData['ISBGS'][bgs_mask]
+#print(sum(masked_fsf))
+#rint(len(masked_fsf))
+#print(sum(masked_fsf) == len(masked_fsf))
+
+lum = fsfData['OII_COMBINED_LUMINOSITY_LOG'][bgs_mask]
+redshift = fsfData['Z'][bgs_mask]
+plt.plot(redshift, lum, '.', alpha=0.3)
+plt.xlabel("Redshift")
+plt.ylabel(r"$\log (L_{\mathrm{[OII]}})$ [erg s$^{-1}$]")
+plt.title("[OII] luminosity redshift dependence for BGS in sv3")
+#plt.savefig(f'BGS oii luminosity vs redshift.png')
+plt.show()
