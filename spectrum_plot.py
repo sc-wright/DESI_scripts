@@ -264,7 +264,7 @@ class Spectra:
         #self.files_checked = False
         #self.check_for_files()
 
-    def plot_spectrum(self):
+    def plot_spectrum(self, foldstruct="spectra/"):
 
         selected_tgts = self.zpix_cat['TARGETID'] == self.targetid
 
@@ -293,8 +293,9 @@ class Spectra:
         zsurvey = self.zpix_cat["SURVEY"][selected_tgts]
         zwarn = self.zpix_cat["ZWARN"][selected_tgts]
         for a, b, c in zip(zprog, zsurvey, zwarn):
+            print(a, c)
             if a == self.program:
-                if zwarn > 0:
+                if c > 0:
                     zflag = True
 
         if zflag:
@@ -325,40 +326,37 @@ class Spectra:
 
         mw_transmission_spec = dust_transmission(coadd_spec.wave[bands], meta['EBV'][meta['TARGETID'] == self.targetid])
 
-
-        """
-        zshift_wl = coadd_spec.wave['brz']/zFact
-        flux_array = coadd_spec.flux['brz'][0]
-        lim_l = 2500
-        lim_u = 6000
-        lowcut = [zshift_wl >= lim_l]
-        print(lowcut)
-        zshift_wl = zshift_wl[lowcut]
-        flux_array = flux_array[lowcut]
-        hicut = [zshift_wl <= lim_u]
-        zshift_wl = zshift_wl[hicut]
-        flux_array = flux_array[hicut]
-        """
-
         line_names = [r'$[OII]$', r'$[OIII]$', r'$[OIII]$', r'$H\alpha$', r'$H\beta$', r'$H\gamma$',
                       r'$H\delta$', r'$[SII]$', r'$[SII]$', r'$CaII H$', r'$CaII K$', r'$[NII]$',
-                      r'$[NII]$']
-        line_vals = [3727, 4959, 5007, 6563, 4861, 4340, 4102, 6716, 6731, 3933, 3968, 6548, 6584]
+                      r'$[NII]$', r'$[NeV]$']
+        line_vals = [3727, 4959, 5007, 6563, 4861, 4340, 4102, 6716, 6731, 3933, 3968, 6548, 6584, 3426]
 
-        x_limit = 25
-        s_fact = 1.5
+        spec_lo = 3200
+        spec_hi = 7000
 
+        nev_limit = 15
+        oii_limit = 10
+        hb_limit = 10
+        oiii_limit = 35
+        nii_limit = 25
+        sii_limit = 20
+
+        # this is the wl to use as the center of the subfig
         oii_line = 3727.5
         sii_line = (6716 + 6731) / 2
-        oiii_line = 4934
-        nii_line = 6566
+        nii_line = 6566 # average of the 3 lines showing in that subfig
+        oiii_line = (4959 + 5007) / 2
+        hb_line = 4861
+        nev_line = 3426
+
+        # buff determines how much space to put above and below the top of the lines
         buff = 0.15
 
         full_spec = coadd_spec.flux['brz'][0] / mw_transmission_spec
 
         # get maxima and minima for full plot
-        full_left_lim = coadd_spec.wave['brz'] / zFact > (3500)
-        full_right_lim = coadd_spec.wave['brz'] / zFact < (7000)
+        full_left_lim = coadd_spec.wave['brz'] / zFact > (spec_lo)
+        full_right_lim = coadd_spec.wave['brz'] / zFact < (spec_hi)
         full_xlims = np.logical_and(full_left_lim, full_right_lim)
         full_y_top = max(full_spec[full_xlims])
         full_y_bottom = min(full_spec[full_xlims])
@@ -367,53 +365,98 @@ class Spectra:
         full_y_bottom -= full_y_range*buff
 
         # get maxima and minima for oii subplot
-        oii_left_lim = coadd_spec.wave['brz'] / zFact > (oii_line-x_limit)
-        oii_right_lim = coadd_spec.wave['brz'] / zFact < (oii_line+x_limit)
+        oii_left_lim = coadd_spec.wave['brz'] / zFact > (oii_line-oii_limit)
+        oii_right_lim = coadd_spec.wave['brz'] / zFact < (oii_line+oii_limit)
         oii_xlims = np.logical_and(oii_left_lim, oii_right_lim)
-        oii_y_top = max(full_spec[oii_xlims])
-        oii_y_bottom = min(full_spec[oii_xlims])
+        try:
+            oii_y_top = max(full_spec[oii_xlims])
+            oii_y_bottom = min(full_spec[oii_xlims])
+        except ValueError:
+            oii_y_top = 1
+            oii_y_bottom = 0
         oii_y_range = oii_y_top - oii_y_bottom
         oii_y_top += oii_y_range*buff
         oii_y_bottom -= oii_y_range*buff
 
         # get maxima and minima for sii subplot
-        sii_left_lim = coadd_spec.wave['brz'] / zFact > (sii_line-x_limit*s_fact)
-        sii_right_lim = coadd_spec.wave['brz'] / zFact < (sii_line+x_limit*s_fact)
+        sii_left_lim = coadd_spec.wave['brz'] / zFact > (sii_line-sii_limit)
+        sii_right_lim = coadd_spec.wave['brz'] / zFact < (sii_line+sii_limit)
         sii_xlims = np.logical_and(sii_left_lim, sii_right_lim)
-        sii_y_top = max(full_spec[sii_xlims])
-        sii_y_bottom = min(full_spec[sii_xlims])
+        try:
+            sii_y_top = max(full_spec[sii_xlims])
+            sii_y_bottom = min(full_spec[sii_xlims])
+        except ValueError:
+            sii_y_top = 1
+            sii_y_bottom = 0
         sii_y_range = sii_y_top - sii_y_bottom
         sii_y_top += sii_y_range*buff
         sii_y_bottom -= sii_y_range*buff
 
+        # get maxima and minima for nii subplot
+        nii_left_lim = coadd_spec.wave['brz'] / zFact > (nii_line-nii_limit)
+        nii_right_lim = coadd_spec.wave['brz'] / zFact < (nii_line+nii_limit)
+        nii_xlims = np.logical_and(nii_left_lim, nii_right_lim)
+        try:
+            nii_y_top = max(full_spec[nii_xlims])
+            nii_y_bottom = min(full_spec[nii_xlims])
+        except ValueError:
+            nii_y_top = 1
+            nii_y_bottom = 0
+        nii_y_range = nii_y_top - nii_y_bottom
+        nii_y_top += nii_y_range*buff
+        nii_y_bottom -= nii_y_range*buff
+
         #get maxima and minima for oiii subplot
-        oiii_left_lim = coadd_spec.wave['brz'] / zFact > (oiii_line-x_limit*s_fact*3)
-        oiii_right_lim = coadd_spec.wave['brz'] / zFact < (oiii_line+x_limit*s_fact*3)
+        oiii_left_lim = coadd_spec.wave['brz'] / zFact > (oiii_line-oiii_limit)
+        oiii_right_lim = coadd_spec.wave['brz'] / zFact < (oiii_line+oiii_limit)
         oiii_xlims = np.logical_and(oiii_left_lim, oiii_right_lim)
-        oiii_y_top = max(full_spec[oiii_xlims])
-        oiii_y_bottom = min(full_spec[oiii_xlims])
+        try:
+            oiii_y_top = max(full_spec[oiii_xlims])
+            oiii_y_bottom = min(full_spec[oiii_xlims])
+        except ValueError:
+            oiii_y_top = 1
+            oiii_y_bottom = 0
         oiii_y_range = oiii_y_top - oiii_y_bottom
         oiii_y_top += oiii_y_range*buff
         oiii_y_bottom -= oiii_y_range*buff
 
-        # get maxima and minima for nii subplot
-        nii_left_lim = coadd_spec.wave['brz'] / zFact > (nii_line-x_limit)
-        nii_right_lim = coadd_spec.wave['brz'] / zFact < (nii_line+x_limit)
-        nii_xlims = np.logical_and(nii_left_lim, nii_right_lim)
-        nii_y_top = max(full_spec[nii_xlims])
-        nii_y_bottom = min(full_spec[nii_xlims])
-        nii_y_range = nii_y_top - nii_y_bottom
-        nii_y_top += nii_y_range*buff
-        nii_y_bottom -= nii_y_range*buff
+        # get maxima and minima for hb subplot
+        hb_left_lim = coadd_spec.wave['brz'] / zFact > (hb_line-hb_limit)
+        hb_right_lim = coadd_spec.wave['brz'] / zFact < (hb_line+hb_limit)
+        hb_xlims = np.logical_and(hb_left_lim, hb_right_lim)
+        try:
+            hb_y_top = max(full_spec[hb_xlims])
+            hb_y_bottom = min(full_spec[hb_xlims])
+        except ValueError:
+            hb_y_top = 1
+            hb_y_bottom = 0
+        hb_y_range = hb_y_top - hb_y_bottom
+        hb_y_top += hb_y_range*buff
+        hb_y_bottom -= hb_y_range*buff
+
+        nev_left_lim = coadd_spec.wave['brz'] / zFact > (nev_line-nev_limit)
+        nev_right_lim = coadd_spec.wave['brz'] / zFact < (nev_line+nev_limit)
+        nev_xlims = np.logical_and(nev_left_lim, nev_right_lim)
+        try:
+            nev_y_top = max(full_spec[nev_xlims])
+            nev_y_bottom = min(full_spec[nev_xlims])
+        except ValueError:
+            nev_y_top = 1
+            nev_y_bottom = 0
+        nev_y_range = nev_y_top - nev_y_bottom
+        nev_y_top += nev_y_range*buff
+        nev_y_bottom -= nev_y_range*buff
 
 
         plt.figure(figsize=(12, 9))
         ax1 = plt.subplot(3, 3, (1, 3))
         ax2 = plt.subplot(3, 3, 4)
-        ax3 = plt.subplot(3, 3, (5, 6))
-        ax4 = plt.subplot(3, 3, (7, 8))
-        ax5 = plt.subplot(3, 3, 9)
-        axes = [ax1, ax2, ax3, ax4, ax5]
+        ax3 = plt.subplot(3, 3, 5)
+        ax4 = plt.subplot(3, 3, 6)
+        ax5 = plt.subplot(3, 3, 7)
+        ax6 = plt.subplot(3, 3, 8)
+        ax7 = plt.subplot(3, 3, 9)
+        axes = [ax1, ax2, ax3, ax4, ax5, ax6, ax7]
 
         # PLOTTING FULL SPECTRUM
         ax1.plot(coadd_spec.wave['brz']/zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
@@ -424,13 +467,13 @@ class Spectra:
 
         #ax1.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)), color='k', lw=2.0)
 
-        ax1.set_xlim([3500, 7000])
+        ax1.set_xlim([spec_lo, spec_hi])
         ax1.set_ylim([full_y_bottom, full_y_top])
         lastline = 0
         vertpos = 0.8
         for line, name in sorted(zip(line_vals, line_names)):
-            if line - lastline < 60:
-                vertpos -=.1
+            if line - lastline < 70:
+                vertpos -=.12
             else:
                 vertpos = 0.8
             ax1.axvline(x = line, linestyle='dashed', lw = 0.8, alpha=0.4)
@@ -453,75 +496,113 @@ class Spectra:
         ax1.legend(fontsize=8, loc='lower right')
 
 
-        # plotting oii spectrum
+
+
+        # plotting nev spectrum
         ax2.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
                  color='maroon', alpha=0.5)
         #ax2.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                  #color='k', lw=1.0)
         ax2.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
-        ax2.set_xlim([oii_line-x_limit, oii_line+x_limit])
-        ax2.set_ylim([oii_y_bottom, oii_y_top])
-        ax2.text(0.995, 0.975, f'[OII]/[OII]',
+        ax2.set_xlim([nev_line-nev_limit, nev_line+nev_limit])
+        ax2.set_ylim([nev_y_bottom, nev_y_top])
+        ax2.text(0.995, 0.975, f'[Ne V]',
                  horizontalalignment='right',
                  verticalalignment='top',
                  transform=ax2.transAxes)
-        ax2.axvline(3726, linestyle='dashed', lw = 0.8, alpha=0.4)
-        ax2.axvline(3729, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax2.axvline(3426, linestyle='dashed', lw = 0.8, alpha=0.4)
         ax2.set_xlabel(r'$\lambda_{rest}$')
 
-        # plotting sii spectrum
+
+
+
+        # plotting oii spectrum
         ax3.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
                  color='maroon', alpha=0.5)
         #ax3.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                  #color='k', lw=1.0)
         ax3.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
-
-        ax3.set_xlim([sii_line - x_limit*s_fact, sii_line + x_limit*s_fact])
-        ax3.set_ylim([sii_y_bottom, sii_y_top])
-        ax3.text(0.995, 0.975, f'[SII]/[SII]',
+        ax3.set_xlim([oii_line-oii_limit, oii_line+oii_limit])
+        ax3.set_ylim([oii_y_bottom, oii_y_top])
+        ax3.text(0.995, 0.975, f'[O II]/[O II]',
                  horizontalalignment='right',
                  verticalalignment='top',
                  transform=ax3.transAxes)
-        ax3.axvline(6716, linestyle='dashed', lw = 0.8, alpha=0.4)
-        ax3.axvline(6731, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax3.axvline(3726, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax3.axvline(3729, linestyle='dashed', lw = 0.8, alpha=0.4)
         ax3.set_xlabel(r'$\lambda_{rest}$')
 
-        # plotting oiii spectrum
+
+        # plotting hb spectrum
         ax4.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
                  color='maroon', alpha=0.5)
         #ax4.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                  #color='k', lw=1.0)
         ax4.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
-        ax4.set_xlim([oiii_line - x_limit*s_fact*3, oiii_line + x_limit*s_fact*3])
-        ax4.set_ylim([oiii_y_bottom, oiii_y_top])
-        ax4.text(0.995, 0.975, fr'H$\beta$/[OIII]/[OIII]',
+        ax4.set_xlim([hb_line-hb_limit, hb_line+hb_limit])
+        ax4.set_ylim([hb_y_bottom, hb_y_top])
+        ax4.text(0.995, 0.975, r'$H \beta$',
                  horizontalalignment='right',
                  verticalalignment='top',
                  transform=ax4.transAxes)
         ax4.axvline(4861, linestyle='dashed', lw = 0.8, alpha=0.4)
-        ax4.axvline(4959, linestyle='dashed', lw = 0.8, alpha=0.4)
-        ax4.axvline(5007, linestyle='dashed', lw = 0.8, alpha=0.4)
         ax4.set_xlabel(r'$\lambda_{rest}$')
 
-        # plotting nii spectrum
+
+        # plotting oiii spectrum
         ax5.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
                  color='maroon', alpha=0.5)
         #ax5.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                  #color='k', lw=1.0)
         ax5.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
-
-        ax5.set_xlim([nii_line-x_limit, nii_line+x_limit])
-        ax5.set_ylim([nii_y_bottom, nii_y_top])
-        ax5.text(0.995, 0.975, fr'[NII]/H$\alpha$/[NII]',
+        ax5.set_xlim([oiii_line - oiii_limit, oiii_line + oiii_limit])
+        ax5.set_ylim([oiii_y_bottom, oiii_y_top])
+        ax5.text(0.995, 0.975, r'[O III]/[O III]',
                  horizontalalignment='right',
                  verticalalignment='top',
                  transform=ax5.transAxes)
-        ax5.axvline(6548, linestyle='dashed', lw = 0.8, alpha=0.4)
-        ax5.axvline(6563, linestyle='dashed', lw = 0.8, alpha=0.4)
-        ax5.axvline(6584, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax5.axvline(4959, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax5.axvline(5007, linestyle='dashed', lw = 0.8, alpha=0.4)
         ax5.set_xlabel(r'$\lambda_{rest}$')
 
-        plt.savefig(f'spectra/spectrum {self.targetid}.png', dpi=800)
+
+        # plotting nii spectrum
+        ax6.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
+                 color='maroon', alpha=0.5)
+        #ax6.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
+                 #color='k', lw=1.0)
+        ax6.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
+
+        ax6.set_xlim([nii_line-nii_limit, nii_line+nii_limit])
+        ax6.set_ylim([nii_y_bottom, nii_y_top])
+        ax6.text(0.995, 0.975, fr'[N II]/H$\alpha$/[N II]',
+                 horizontalalignment='right',
+                 verticalalignment='top',
+                 transform=ax6.transAxes)
+        ax6.axvline(6548, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax6.axvline(6563, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax6.axvline(6584, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax6.set_xlabel(r'$\lambda_{rest}$')
+
+
+        # plotting sii spectrum
+        ax7.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
+                 color='maroon', alpha=0.5)
+        #ax7.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
+                 #color='k', lw=1.0)
+        ax7.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
+        ax7.set_xlim([sii_line - sii_limit, sii_line + sii_limit])
+        ax7.set_ylim([sii_y_bottom, sii_y_top])
+        ax7.text(0.995, 0.975, f'[SII]/[SII]',
+                 horizontalalignment='right',
+                 verticalalignment='top',
+                 transform=ax7.transAxes)
+        ax7.axvline(6716, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax7.axvline(6731, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax7.set_xlabel(r'$\lambda_{rest}$')
+
+
+        plt.savefig(f'{foldstruct}spectrum {self.targetid}.png', dpi=800)
         plt.show()
 
     def fetch_models(self):
@@ -531,7 +612,7 @@ class Spectra:
         if len(healpix) == 1: # if there's only one healpix number (which should be the case)
             healpix = healpix[0]
         else: # if there's more than one, print the numbers and exit with error code
-            print(healpix)
+            print(f"healpix: {healpix}")
             return 2
         print(f'healpix num: {healpix}')
         specfile = f'{self.healpix_dir}/{self.survey}/{self.program}/{healpix // 100}/{healpix}/coadd-{self.survey}-{self.program}-{healpix}.fits'
@@ -708,9 +789,21 @@ class Spectra:
 
 def spec_plot():
     #targetid = 39627806480531653
-    targetid = 39627746007056970
+    #targetid = 39627746007056970
+    #tid_list = [39627733927462346, 39627733927464793, 39627733935851493, 39627733935852476, 39627733935853536, 39627733940044449, 39627733940045268, 39627733940047632, 39627733940047917, 39627733940048725]
+    #tid_list = [39627733935851493]
+
+
+    with open('possible_agn_tids.txt', 'r') as f:
+        tid_list = f.readlines()
+
     # if Spectra has no targetid given, it picks a random BGS galaxy from sv3
-    spec = Spectra(targetid=targetid)
+
+    for i in range(len(tid_list)//20):
+        tid = int(tid_list[i])
+        spec = Spectra(targetid=tid)
+        spec.check_for_files()
+        spec.plot_spectrum(foldstruct="spectra/possible_agn/")
     # if this is the first time the galaxy has been plotted make sure to run this. If tid is randomly selected, this is run automatically.
     # spec.check_for_files()
     spec.plot_spectrum()  # this makes the plot and saves it

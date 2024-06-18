@@ -1,6 +1,7 @@
 import os
 
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 plt.rcParams['text.usetex'] = True
 
 import numpy as np
@@ -34,6 +35,28 @@ from desitarget.targetmask import desi_mask as specialmask
 
 class FSFCat:
     def __init__(self):
+        """
+        The FSFCat class creates a catalog object which contains a table with data from the vacs: especially the fsf cat
+        It creates several useful attributes which are useful to make many plots
+        self.specprod:          str: the codename for the release ('fuji' is for the edr)
+        self.specprod_dir:      str: the local directory where the data for the release is stored
+        self.fsfCatalogsDir:    str: the local directory where the fsf catalogs are stored
+        self.lssCatalogsDir:    str: the local directory where the lss catalogs are stored
+        self.ds9CatalogsDir:    str: the local directory where the ds9 catalogs are stored
+        self.fsfMeta:           astropy table: the metadata table from the fsf catalog
+        self.fsfData:           astropy table: the data table from the fsf catalog
+        self.lssData:           astropy table: the data table from the lss catalog
+        self.bgs_mask_hiz:      boolean array: an array that can be used to mask for all 'good' bgs sv3 targets
+        self.bgs_mask           boolean array: same as above but only for the expected redshift: 0 > z > .6  (this will usually be used to make plots)
+
+        There are more attributes that get created elsewhere
+
+
+        todo: find a way to rewrite this so that it takes a table object as an argument without complicating usage so that the same catalog can be stored in memory for use in several different classes. Maybe another separate class
+        todo: go through all the attributes and make sure it is clear which are defined in the instantiator
+        todo: figure out if we can switch to a different/smaller fsf catalog for just bgs/sv3 targets to save memory and runtime
+        """
+
         my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
         self.specprod = 'fuji'
         self.specprod_dir = f'{my_dir}/public/edr/spectro/redux/{self.specprod}'
@@ -44,17 +67,19 @@ class FSFCat:
         self.fsfMeta = Table.read(f'{self.fsfCatalogsDir}/fastspec-fuji.fits', hdu=2)
 
         try:
+            # try to just read in the modified table with the extra columns added
             print("reading in fsf table...")
             self.fsfData = Table.read(f'{self.fsfCatalogsDir}/fastspec-fuji-data-processed.fits')
         except FileNotFoundError:
+            # if the modified table doesn't exist, do the necessary calculations and create the table.
+            # this can take several minutes to run. It should include a progress report for the longest step, but be patient for the rest.
             print("FITS with pre-calculated values not found, generating new file...")
+            # The table gets read in inside of the first step.
             self.spec_type_in_fsf()
             self.add_lum_to_table()
             snr = self.calculate_oii_snr()
             self.add_col_to_table("OII_SUMMED_SNR", snr)
             self.write_table_to_disk()
-
-        self.fsfMeta = Table.read(f'{self.fsfCatalogsDir}/fastspec-fuji.fits', hdu=2)
 
         print("reading in lss table...")
         self.lssData = Table.read(f'{self.lssCatalogsDir}/BGS_ANY_full.dat.fits')
@@ -65,14 +90,20 @@ class FSFCat:
         # select the targetids from the fsf catalog that are also in the BGS_ANY lss catalog
         # then remove any that did not get appropriate L([OII]) fits.
         bgs_mask = [i in bgs_tids for i in self.fsfData['TARGETID']]
+
         self.bgs_mask_hiz = np.logical_and(bgs_mask, self.fsfData['OII_COMBINED_LUMINOSITY_LOG'] > 0)
-        self.bgs_mask = np.logical_and(self.bgs_mask_hiz, self.fsfData['Z'] < .8)
+        self.bgs_mask = np.logical_and(self.bgs_mask_hiz, self.fsfData['Z'] < .6)  # can change redshift limit here - .6 is supposed to be the limit but there are many sources up to .8
         # bgs_mask is a boolean array that gets applied to the fsfData array to select data from good targets
 
     def spec_type_in_fsf(self):
+        """
+        This contains modified code from the desi tutorials to add survey tracers as tracers in the table.
+        It is largely redundant at this point since we have determined better ways to create a list of meaningful targets.
+        It creates and then modifies the self.fsfData table to add a boolean for each tracer in a column.
+        It only needs to be called if fastspec-fuji-data-processed.fits does not exist.
 
-        # This adds the survey tracer (BGS, ELG, LRG, QSO, STAR, SCND) to the table (in memory)
-        # It only needs to be called if fastspec-fuji-data-processed.fits does not exist
+        :return: None
+        """
 
         #### Making lists to split the different surveys ####
 
@@ -178,6 +209,14 @@ class FSFCat:
         self.fsfData = fsfData
 
     def add_lum_to_table(self):
+        """
+        This calculates the [OII] luminosity and adds it in a new column to the table that already exists in memory.
+        The luminosity column is called "OII_COMBINED_LUMINOSITY_LOG" which isn't a good name but it's too much trouble
+        to change it now.
+        It only needs to be called if fastspec-fuji-data-processed.fits does not exist.
+
+        :return: None
+        """
         # This adds the oii luminosity to the table (in memory)
         # It only needs to be called if fastspec-fuji-data-processed.fits does not exist
 
@@ -213,8 +252,18 @@ class FSFCat:
                 print('\r' + trString, end='', flush=True)
 
     def calculate_oii_snr(self):
-        # This calculates the SNR of the OII flux.
-        # It only needs to be called if fastspec-fuji-data-processed.fits does not exist
+        """
+        This calculates the SNR of the [OII] flux for every entry in the catalog.
+        It calculates noise by square rooting the reciprocal of the "_AMP_IVAR" entry in the model for each line,
+        and then adding them in quadrature.
+        It calculates signal by adding the "_FLUX" entry in the model for the two lines.
+        This only needs to be run if fastspec-fuji-data-processed.fits does not exist.
+
+        todo: the "_AMP_IVAR" is inverse variance of the amplitude, not the flux. Is there a better way to do this?
+
+        :return: an array of floats with the SNR for the combined [OII] flux for every entry in the catalog
+        """
+
 
         noise1 = np.array(self.fsfData['OII_3726_AMP_IVAR'])
         noise1 = np.sqrt(1 / noise1)
@@ -230,7 +279,57 @@ class FSFCat:
 
         return snr
 
+    def calculate_oii_rat_snr(self, snrlim, plot=False):
+        """
+        This calculates the snr for the oii ratio itself. Call it before
+        1. Takes the inverse square root of the '_AMP_IVAR' for each line to get the uncertainty
+        2. Divide the '_AMP' by the uncertainty for each line and then add these fractional uncertainties in quadrature
+        3. The SNR then becomes 1/net uncertainty
+        This is a naive way to calculate the snr, because the two inverse variances are coupled. This vastly overestimates the uncertainty.
+        A better way will be implemented soon
+
+        Creates a new attribute:
+        self.snr_bgs_mask: boolean array: Can be used in place of the bgs_mask if we want to only access targets above a certain snr (set by snrlim)
+
+        todo: Either make this run in the init by default so the snr is always available, or add it as another column to the table
+        todo: Come up with and implement a better way to calculate SNR for the ratio, which will repalce this method
+
+        :param snrlim: int/float: The minimum snr to cut by in the self.snr_bgs_mask
+        :param plot: bool: if True, makes and saves a histogram of all the snr
+        :return: None
+        """
+        # this is a huge overestimation since it treats the uncertainties as independent
+        # just a top level look and a way to cut the absolutely most unreliable sources
+        oii_3726_lineamp = self.fsfData['OII_3726_AMP']
+        oii_3726_uncert = np.sqrt(1 / self.fsfData['OII_3726_AMP_IVAR'])
+        oii_3729_lineamp = self.fsfData['OII_3729_AMP']
+        oii_3729_uncert = np.sqrt(1 / self.fsfData['OII_3729_AMP_IVAR'])
+
+        net_uncert = np.sqrt((oii_3726_uncert / oii_3726_lineamp) ** 2 + (oii_3729_uncert / oii_3729_lineamp) ** 2)
+
+        oii_rat = self.fsfData['OII_DOUBLET_RATIO']
+        #oii_rat_filt = oii_rat[self.bgs_mask]
+        #snr_3726 = oii_3726_lineamp/oii_3726_uncert
+        #snr_3729 = oii_3729_lineamp/oii_3729_uncert
+
+        ratio_snr = 1/net_uncert
+        self.snr_bgs_mask = np.logical_and(self.bgs_mask, ratio_snr > snrlim)
+
+        if plot:
+            plt.hist(ratio_snr[self.bgs_mask], bins=100, range=(0,25))
+            plt.xlabel("SNR for [OII] doublet ratio in BGS (underestimate)")
+            plt.savefig("naive_uncoupled_snr_hist.png")
+            plt.show()
+
     def write_table_to_disk(self):
+        """
+        This takes the current self.fsfData table and writes it to a new fits file so calculations don't need to be remade
+        The new fits file has just the one data table, the metadata (in hdu 2 of the original fits file) is lost.
+        The metadata can still be read from the original fits file, as the rows are still matched.
+        If the processed file is missing or needs to be remade, this is the last method to run to do that.
+
+        :return: None
+        """
         # This writes the current version of the table as it exists in memory to the disk
         # as "fastspec-fuji-data-processed.fits"
         # It only needs to be called if the processed table doesn't exist yet
@@ -249,6 +348,14 @@ class FSFCat:
             self.fsfData.write(self.fsfCatalogsDir + "/fastspec-fuji-data-processed.fits")
 
     def add_col_to_table(self, colstr, data):
+        """
+        This takes an array of any type (data) and adds it to the self.fsfData table (in memory) with the column name 'colstr'
+        The array must be the same length as the other columns in the table
+
+        :param colstr: str: the name of the column to add (CAPS by convention)
+        :param data: any array: The data to add as a column. The array must be the same length as all the other columns in the table
+        :return: None
+        """
 
         print(f"Adding column {colstr} to table...")
 
@@ -257,15 +364,18 @@ class FSFCat:
         for i, v in enumerate(data):
             self.fsfData[colstr][i] = v
 
+        # Optionally write out the whole table to disk again.
+        # Generally keep this disabled so the table from disk always has known columns
         # write_table_to_disk(table)
 
     def plot_lum_vs_redshift(self, zrange = False):
         """
-        :param zrange:
-        optional parameter zrange can be a two-value tuple with the low and high end of the redshift range you want to
-        show in the plot.
-        :return:
-        returns nothing. Saves and shows the plots.
+        Creates two new boolean arrays for the OII flux SNR and then plots the [OII] luminosity vs redshift, coloring
+        dots with SNR < 3 differently.
+        If no argument is given for zrange, it plots the expected range for BGS of 0 < z < .6
+
+        :param zrange: tuple with 2 floats: low and high end of the redshift range to plot, respectively
+        :return: None
         """
         snr_hi_mask = self.fsfData['OII_SUMMED_SNR'] >= 3
         snr_lo_mask = self.fsfData['OII_SUMMED_SNR'] < 3
@@ -279,7 +389,7 @@ class FSFCat:
         plt.scatter(redshift_lo, lum_lo, marker='.', alpha=0.3, label=r'SNR $< 3$')
         if zrange:
             plt.xlim(zrange[0], zrange[1])
-        plt.title(r"L_{[OII]} vs redshift")
+        plt.title(r"$L_{[OII]}$ vs redshift")
         plt.xlabel("z")
         plt.ylabel(r"$L_{[OII]}$ (combined)")
         plt.legend()
@@ -288,25 +398,63 @@ class FSFCat:
         else:
             plt.savefig(f'figures/bgs_loii_vs_redshift_allz.png')
         plt.show()
+        #plt.clf()
 
-    def plot_oii_rat_vs_stellar_mass(self):
-        oii_rat = self.fsfData['OII_DOUBLET_RATIO'][self.bgs_mask]
-        stellar_mass = self.fsfData['LOGMSTAR'][self.bgs_mask]
-        redshift = self.fsfData['Z'][self.bgs_mask]
+    def plot_oii_rat_vs_stellar_mass(self, mass_range=False, snr_lim=False):
+        """
+        Plots the OII doublet ratio vs the stellar mass with a histogram of the ratios
+        Note: Stellar mass may be overestimated in v3.2 of the fastspecfit catalog
 
-        print(oii_rat)
-        print(stellar_mass)
-        print(redshift)
+        :param mass_range: tuple with 2 floats: low and high end of the mass range to plot, respectively
+        :param snr_lim: float or bool: if given, only plots line ratios with snrs above this value
+        :return:
+        """
 
-        plt.scatter(stellar_mass, oii_rat, c=redshift, marker='.', alpha=0.3)
-        plt.xlabel(r"$\log{M_{\star}}$")
-        plt.ylabel("$\lambda 3726 / \lambda 3729$")
-        plt.title("[OII] Doublet Ratio vs Stellar Mass")
-        plt.colorbar(label="Z")
+        if snr_lim:
+            self.calculate_oii_rat_snr(snr_lim, plot=False)
+            oii_rat = self.fsfData['OII_DOUBLET_RATIO'][self.snr_bgs_mask]
+            stellar_mass = self.fsfData['LOGMSTAR'][self.snr_bgs_mask]
+            redshift = self.fsfData['Z'][self.snr_bgs_mask]
+        else:
+            oii_rat = self.fsfData['OII_DOUBLET_RATIO'][self.bgs_mask]
+            stellar_mass = self.fsfData['LOGMSTAR'][self.bgs_mask]
+            redshift = self.fsfData['Z'][self.bgs_mask]
+
+        if mass_range:
+            plot_mask = generate_combined_mask(stellar_mass >= mass_range[0], stellar_mass < mass_range[0])
+        else:
+            plot_mask = np.ones(len(stellar_mass), dtype=bool)
+
+        fig = plt.figure(figsize=(8, 8))
+        gs = GridSpec(2, 4)
+        ax_main = plt.subplot(gs[0:2,:3])
+        #ax_xDist = plt.subplot(gs[0, :2], sharex=ax_main)
+        ax_yDist = plt.subplot(gs[0:2,3], sharey=ax_main)
+        plt.subplots_adjust(wspace=.0)
+
+        ax_main.scatter(stellar_mass[plot_mask], oii_rat[plot_mask], c=redshift[plot_mask], marker='.', alpha=0.3)
+        ax_main.set(xlabel=r"$\log{M_{\star}}$", ylabel="$\lambda 3726 / \lambda 3729$")
+
+        #ax_xDist.hist(stellar_mass, bins=100, align='mid')
+        #ax_xDist.set(ylabel='count')
+
+        ax_yDist.hist(oii_rat[plot_mask], bins=100, orientation='horizontal', align='mid')
+        ax_yDist.set(xlabel='count')
+
+        ax_yDist.invert_xaxis()
+        ax_yDist.yaxis.tick_right()
+
         plt.savefig("figures/oii_ratio_vs_mass.png")
+
         plt.show()
 
+
     def plot_oii_rat_vs_oii_flux(self):
+        """
+        Plots the OII amplitude ratio vs the total oii flux with redshift as a color axis
+
+        :return: None
+        """
         oii_rat = self.fsfData['OII_DOUBLET_RATIO'][self.bgs_mask]
         oii_flux = self.fsfData['OII_3726_FLUX'][self.bgs_mask] + self.fsfData['OII_3729_FLUX'][self.bgs_mask]
         redshift = self.fsfData['Z'][self.bgs_mask]
@@ -318,8 +466,15 @@ class FSFCat:
         plt.colorbar(label="Z")
         plt.savefig("figures/oii_ratio_vs_oii_flux.png")
         plt.show()
+        plt.clf()
 
     def plot_oii_lum_vs_color(self, zrange = False):
+        """
+        Plots the total oii luminosity vs the g-r color using the SDSS g and r colors
+
+        :param zrange: bool or tuple with 2 numbers: if given, low and high end of redshift range to plot, respectively. Otherwise plots bgs_mask range
+        :return: None
+        """
 
         if zrange:
             loz_mask = self.fsfData['Z'] >= zrange[0]
@@ -328,100 +483,157 @@ class FSFCat:
             full_mask = np.logical_and(z_mask, self.bgs_mask)
         else:
             full_mask = self.bgs_mask
-        r_band = self.fsfMeta['FLUX_R'][full_mask] / self.fsfMeta['MW_TRANSMISSION_R'][full_mask]
-        g_band = self.fsfMeta['FLUX_G'][full_mask] / self.fsfMeta['MW_TRANSMISSION_G'][full_mask]
+        r_band = self.fsfData['ABSMAG01_SDSS_R'][full_mask]
+        g_band = self.fsfData['ABSMAG01_SDSS_G'][full_mask]
         colors = g_band - r_band
         oii_luminosity = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][full_mask]
         redshift = self.fsfData['Z'][full_mask]
 
         plt.scatter(colors, oii_luminosity, c=redshift, marker='.', alpha=0.3)
-        plt.xlabel("g-r [nmgy]")
-        plt.ylabel(r"$L_{[OII]}$ (combined) [erg]")
-        plt.title(r'$L_{[OII]}$ vs color')
-        plt.colorbar(label="Z")
-        if zrange:
-            plt.savefig(f'figures/oii_luminosity_vs_g-r_color_z={zrange}.png')
-            plt.xlim(-1000, 50)
-            plt.ylim(36, 42)
-            plt.savefig(f'figures/oii_luminosity_vs_g-r_color_z={zrange}[zoomed].png')
-
-        else:
-            plt.savefig(f'figures/oii_luminosity_vs_g-r_color.png')
-            plt.xlim(-1000, 50)
-            plt.ylim(36, 42)
-            plt.savefig(f'figures/oii_luminosity_vs_g-r_color[zoomed].png')
-
-        #plt.show()
-
-    def plot_oii_lum_vs_color_old(self, zrange = False):
-        print("reading in photometry table...")
-        self.ds9Data = Table.read(f'{self.ds9CatalogsDir}/targetphot-sv3-fuji.fits')
-
-        # Covnert the astropy Table to pandas for ease of table merging
-        print('converting tables to pandas...')
-        names = [name for name in self.fsfData.colnames if len(self.fsfData[name].shape) <= 1]
-        fsfPd = self.fsfData[names].to_pandas()
-        names = [name for name in self.ds9Data.colnames if len(self.ds9Data[name].shape) <= 1]
-        ds9Pd = self.ds9Data[names].to_pandas()
-        ds9Colors = ds9Pd[['TARGETID', 'FLUX_G', 'FLUX_R']]
-
-        print('merging tables...')
-        # Since the g and r columns are identical for any given targetid, we can just drop all the duplicate targetids
-        ds9Unique = ds9Pd.drop_duplicates(subset=['TARGETID'])
-        merged_color = pd.merge(fsfPd[self.bgs_mask], ds9Unique, on='TARGETID', how='left')
-
-        """
-        bgs_tids = self.fsfData['TARGETID'][self.bgs_mask]
-        print("processing photometric data to make color plot...")
-        color = np.zeros(len(bgs_tids))
-        percent = 0
-        for i, tid in enumerate(bgs_tids):
-            targs = self.ds9Data['TARGETID'] == tid
-            g = np.unique(self.ds9Data['FLUX_G'][targs])
-            r = np.unique(self.ds9Data['FLUX_R'][targs])
-            if len(g) > 1 and len(r) > 1:
-                print(f"more than 1 entry for tid {tid}")
-                print(len(g), len(r))
-                print(g, r)
-            else:
-                color[i] = g[0] - r[0]
-            prog = (i*100)//len(bgs_tids)
-            if prog > percent:
-                percent = prog
-                print(f'\r{prog}% done...', end='', flush=True)
-        """
-        #oii_luminosity = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][self.bgs_mask]
-        print(f'bgs mask: {len(self.bgs_mask)}')
-        print(f"color mask: {len(merged_color['OII_COMBINED_LUMINOSITY_LOG'])}")
-        #color_mask = merged_color['FLUX_G'] > 0 & merged_color['FLUX_R'] > 0 & self.bgs_mask
-
-        oii_luinosity = merged_color['OII_COMBINED_LUMINOSITY_LOG']
-        color = merged_color['FLUX_G'] - merged_color['FLUX_R']
-        redshift = self.fsfData['Z'][self.bgs_mask]
-
-        print('plotting...')
-        plt.scatter(color, oii_luminosity, c=redshift, marker='.', alpha=0.3)
         plt.xlabel("g-r")
         plt.ylabel(r"$L_{[OII]}$ (combined)")
         plt.title(r'$L_{[OII]}$ vs color')
         plt.colorbar(label="Z")
         if zrange:
-            plt.xlim(zrange[0], zrange[1])
             plt.savefig(f'figures/oii_luminosity_vs_g-r_color_z={zrange}.png')
         else:
             plt.savefig(f'figures/oii_luminosity_vs_g-r_color.png')
+
+        plt.show()
+        plt.clf()
+
+    def plot_oii_rat_vs_redshift(self, zrange=False):
+        """
+        Plots oii ratio vs redshift
+
+        todo: add snr limit to this plot
+
+        :param zrange: bool or tuple with 2 numbers: if given, low and high end of redshift range to plot, respectively. Otherwise plots bgs_mask range
+        :return: None
+        """
+        if zrange:
+            loz_mask = self.fsfData['Z'] >= zrange[0]
+            hiz_mask = self.fsfData['Z'] < zrange[1]
+            z_mask = np.logical_and(loz_mask, hiz_mask)
+            full_mask = np.logical_and(z_mask, self.bgs_mask)
+        else:
+            full_mask = self.bgs_mask
+
+        oii_rat = self.fsfData['OII_DOUBLET_RATIO'][full_mask]
+        redshift = self.fsfData['Z'][full_mask]
+        mass = self.fsfData['LOGMSTAR'][full_mask]
+
+        plt.scatter(redshift, oii_rat, c=mass, marker='.', alpha=0.3)
+        plt.xlabel('Redshift')
+        plt.ylabel("$\lambda 3726 / \lambda 3729$")
+        plt.colorbar(label=r"$\log{M_\star}$")
+        plt.title("[OII] doublet ratio vs redshift")
+        if zrange:
+            plt.savefig(f'figures/oii_ratio_vs_redshift_z={zrange}.png')
+        else:
+            plt.savefig('figures/oii_ratio_vs_redshift.png')
+        plt.show()
+        plt.clf()
+
+    def plot_bpt_diag(self):
+        """
+        Plots line ratios in bpt-style diagram with AGN/HII separator lines from Kewley et al. (2001) and Kauffmann et al. (2003)
+
+        todo: there's a third line in the textbook. No clue where it comes from. Find it?
+        :return: None
+        """
+
+        nii = self.fsfData['NII_6584_FLUX'][self.bgs_mask]
+        ha = self.fsfData['HALPHA_FLUX'][self.bgs_mask]
+        oiii = self.fsfData['OIII_5007_FLUX'][self.bgs_mask]
+        hb = self.fsfData['HBETA_FLUX'][self.bgs_mask]
+
+        # removing all cases where the selected line flux is zero, since log(0) and x/0 are undefined
+        zero_mask = generate_combined_mask([nii != 0.0, ha != 0.0, oiii != 0.0, hb != 0.0])
+
+        print(sum(nii[zero_mask] == 0.0), sum(ha[zero_mask] == 0.0), sum(oiii[zero_mask] == 0.0), sum(hb[zero_mask] == 0.0))
+
+        x_for_line_1 = np.log10(np.logspace(-10,.049,500))
+        hii_agn_line = 0.61/(x_for_line_1 - 0.05) + 1.3
+
+        x_for_line_2 = np.log10(np.logspace(-10, 0.45, 500))
+        agn_line_2 = 0.61/(x_for_line_2 - 0.47) + 1.19
+
+        tids = self.fsfData['TARGETID'][self.bgs_mask]
+        with open('possible_agn_tids.txt', 'w') as f:
+            for i in range(len(tids[zero_mask])):
+                if np.log10(nii[zero_mask][i]/ha[zero_mask][i]) < 0 and np.log10(oiii[zero_mask][i]/hb[zero_mask][i]) > 1:
+                    f.write(f"{tids[zero_mask][i]}\n")
+
+        # the third line does not appear in the paper cited... not sure where it comes from
+
+        plt.scatter(np.log10(nii[zero_mask]/ha[zero_mask]), np.log10(oiii[zero_mask]/hb[zero_mask]), marker='.', alpha=0.3)
+        plt.plot(x_for_line_1, hii_agn_line, linestyle='dashed', color='k')
+        plt.plot(x_for_line_2, agn_line_2, linestyle='dotted', color='r')
+        plt.text(-1.3, -1.1, "H II", fontweight='bold')
+        plt.text(-.15, -1.7, "Composite", fontweight='bold')
+        plt.text(-1.0, 1.5, "AGN", fontweight='bold')
+        plt.text(0.5, -1.4, "Shocks", fontweight='bold')
+        plt.xlim(-2, 1)
+        plt.ylim(-2, 2)
+        plt.xlabel(r'$\log([N II] \lambda 6584 / H\alpha$')
+        plt.ylabel(r'$\log([O III] \lambda 5007 / H\beta$')
+        plt.savefig('figures/bpt_bgs_sv3.png')
         plt.show()
 
-
     def generate_all_figs(self):
-        self.plot_lum_vs_redshift(zrange=(0,.8))
+        """
+        Just runs all the plotting routines to generate all-new plots.
+        Probably missing some now
+
+        todo: Once all the plotting routines are written, make sure they are all represented here
+
+        :return: None
+        """
+        self.plot_lum_vs_redshift()
         for i in np.arange(0,.8,.1):
             self.plot_lum_vs_redshift(zrange=(i, i+.1))
+        self.plot_oii_lum_vs_color()
         self.plot_oii_rat_vs_stellar_mass()
         self.plot_oii_rat_vs_oii_flux()
+        self.plot_oii_rat_vs_redshift()
+
+    def report_all_zero_rat(self):
+        """
+        Quick script to make a list of all the TARGETIDs with an OII doublet ratio less than 0.01 (there are none
+        exactly equal to zero) so that we can investigate their spectra
+        Writes a text file to the hard drive in the working directory (of the Pycharm project
+
+        :return: None
+        """
+        oii_rat = self.fsfData['OII_DOUBLET_RATIO'][self.bgs_mask]
+        zoii = self.fsfData['TARGETID'][self.bgs_mask]
+        zoii = zoii[oii_rat < 0.01]
+        with open('zero_rat_tids.txt', 'w') as f:
+            for tid in zoii:
+                f.write(f"{tid}\n")
+
+def generate_combined_mask(masks):
+    """
+    Creates a new boolean array by combining every array in the masks list using 'and' logic
+
+    :param masks: list: a list with at least one element. Each element is a boolean array of equal length
+    :return: A single boolean array that is the 'and' logical combination of all the input arrays
+    """
+    # masks is a list with at least one element. Each element is a boolean array of equal length
+    length = len(masks[0])
+    full_mask = np.ones(length, dtype=bool)
+    for mask in masks:
+        full_mask = np.logical_and(full_mask, mask)
+    return full_mask
 
 
 if __name__ == '__main__':
     catalog = FSFCat()
+    #catalog.calculate_oii_rat_snr(1)  # the argument is the naive snr calculation to use
     #catalog.generate_all_figs()
-    catalog.plot_oii_lum_vs_color()
+    #catalog.plot_oii_lum_vs_color()
+    #catalog.plot_oii_rat_vs_redshift()
+    catalog.plot_oii_rat_vs_stellar_mass(snr_lim=1)
+    #catalog.report_all_zero_rat()
+    #catalog.plot_bpt_diag()
