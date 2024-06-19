@@ -275,10 +275,12 @@ class Spectra:
         hpx_col = zcat_sel['HEALPIX']
         redshift = zcat_sel['Z']
         # each redshift is nearly identical
-        for i in redshift:
-            print(f'redshift: {i}')
-        # we can average them?
-        zFact = np.average(redshift)+1
+        for i, j in zip(redshift, program_col):
+            print(f'redshift ({j}): {i}')
+            if j == self.program:
+                zFact = i + 1
+        # alternative: average them (bad)
+        #zFact = np.average(redshift)+1
 
         is_primary = zcat_sel['ZCAT_PRIMARY']
 
@@ -328,10 +330,10 @@ class Spectra:
 
         line_names = [r'$[OII]$', r'$[OIII]$', r'$[OIII]$', r'$H\alpha$', r'$H\beta$', r'$H\gamma$',
                       r'$H\delta$', r'$[SII]$', r'$[SII]$', r'$CaII H$', r'$CaII K$', r'$[NII]$',
-                      r'$[NII]$', r'$[NeV]$']
-        line_vals = [3727, 4959, 5007, 6563, 4861, 4340, 4102, 6716, 6731, 3933, 3968, 6548, 6584, 3426]
+                      r'$[NII]$', r'$[NeIII]$']
+        line_vals = [3727, 4959, 5007, 6563, 4861, 4340, 4102, 6716, 6731, 3933, 3968, 6548, 6584, 3869]
 
-        spec_lo = 3200
+        spec_lo = 3500
         spec_hi = 7000
 
         nev_limit = 15
@@ -347,7 +349,7 @@ class Spectra:
         nii_line = 6566 # average of the 3 lines showing in that subfig
         oiii_line = (4959 + 5007) / 2
         hb_line = 4861
-        nev_line = 3426
+        nev_line = 3869
 
         # buff determines how much space to put above and below the top of the lines
         buff = 0.15
@@ -470,14 +472,14 @@ class Spectra:
         ax1.set_xlim([spec_lo, spec_hi])
         ax1.set_ylim([full_y_bottom, full_y_top])
         lastline = 0
-        vertpos = 0.8
+        vertpos = 0.6
         for line, name in sorted(zip(line_vals, line_names)):
             if line - lastline < 70:
-                vertpos -=.12
+                vertpos -=.08
             else:
-                vertpos = 0.8
+                vertpos = 0.6
             ax1.axvline(x = line, linestyle='dashed', lw = 0.8, alpha=0.4)
-            ax1.text(line+8, full_y_top*vertpos, name,
+            ax1.text(line+8, full_y_range*vertpos, name,
                      horizontalalignment='left',
                      verticalalignment='center',
                      fontsize=8)
@@ -497,39 +499,37 @@ class Spectra:
 
 
 
-
-        # plotting nev spectrum
+        # plotting oii spectrum
         ax2.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
                  color='maroon', alpha=0.5)
         #ax2.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                  #color='k', lw=1.0)
         ax2.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
-        ax2.set_xlim([nev_line-nev_limit, nev_line+nev_limit])
-        ax2.set_ylim([nev_y_bottom, nev_y_top])
-        ax2.text(0.995, 0.975, f'[Ne V]',
+        ax2.set_xlim([oii_line-oii_limit, oii_line+oii_limit])
+        ax2.set_ylim([oii_y_bottom, oii_y_top])
+        ax2.text(0.995, 0.975, f'[O II]/[O II]',
                  horizontalalignment='right',
                  verticalalignment='top',
                  transform=ax2.transAxes)
-        ax2.axvline(3426, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax2.axvline(3726, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax2.axvline(3729, linestyle='dashed', lw = 0.8, alpha=0.4)
         ax2.set_xlabel(r'$\lambda_{rest}$')
 
 
 
-
-        # plotting oii spectrum
+        # plotting nev spectrum
         ax3.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
                  color='maroon', alpha=0.5)
         #ax3.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                  #color='k', lw=1.0)
         ax3.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
-        ax3.set_xlim([oii_line-oii_limit, oii_line+oii_limit])
-        ax3.set_ylim([oii_y_bottom, oii_y_top])
-        ax3.text(0.995, 0.975, f'[O II]/[O II]',
+        ax3.set_xlim([nev_line-nev_limit, nev_line+nev_limit])
+        ax3.set_ylim([nev_y_bottom, nev_y_top])
+        ax3.text(0.995, 0.975, f'[Ne III]',
                  horizontalalignment='right',
                  verticalalignment='top',
                  transform=ax3.transAxes)
-        ax3.axvline(3726, linestyle='dashed', lw = 0.8, alpha=0.4)
-        ax3.axvline(3729, linestyle='dashed', lw = 0.8, alpha=0.4)
+        ax3.axvline(3869, linestyle='dashed', lw = 0.8, alpha=0.4)
         ax3.set_xlabel(r'$\lambda_{rest}$')
 
 
@@ -602,7 +602,7 @@ class Spectra:
         ax7.set_xlabel(r'$\lambda_{rest}$')
 
 
-        plt.savefig(f'{foldstruct}spectrum {self.targetid}.png', dpi=800)
+        plt.savefig(f'{foldstruct}spectrum_{self.targetid}_{program}.png', dpi=800)
         plt.show()
 
     def fetch_models(self):
@@ -790,22 +790,19 @@ class Spectra:
 def spec_plot():
     #targetid = 39627806480531653
     #targetid = 39627746007056970
-    #tid_list = [39627733927462346, 39627733927464793, 39627733935851493, 39627733935852476, 39627733935853536, 39627733940044449, 39627733940045268, 39627733940047632, 39627733940047917, 39627733940048725]
-    #tid_list = [39627733935851493]
 
-
+    """
     with open('possible_agn_tids.txt', 'r') as f:
         tid_list = f.readlines()
-
-    # if Spectra has no targetid given, it picks a random BGS galaxy from sv3
-
-    for i in range(len(tid_list)//20):
+    for i in range(len(tid_list)//50):
         tid = int(tid_list[i])
         spec = Spectra(targetid=tid)
         spec.check_for_files()
         spec.plot_spectrum(foldstruct="spectra/possible_agn/")
-    # if this is the first time the galaxy has been plotted make sure to run this. If tid is randomly selected, this is run automatically.
-    # spec.check_for_files()
+    """
+
+    spec = Spectra(targetid=39627740030177063)
+    spec.check_for_files()
     spec.plot_spectrum()  # this makes the plot and saves it
     #spec.gen_qa_fig()
     #spec.fetch_models()
