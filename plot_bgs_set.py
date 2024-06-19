@@ -84,13 +84,16 @@ class FSFCat:
         print("reading in lss table...")
         self.lssData = Table.read(f'{self.lssCatalogsDir}/BGS_ANY_full.dat.fits')
 
+        print("removing failed redshifts...")
         # this all the non-vetoed targetids in the bgs. fully unique
         bgs_tids = self.lssData['TARGETID'][self.lssData['ZWARN'] == 0]
 
         # select the targetids from the fsf catalog that are also in the BGS_ANY lss catalog
         # then remove any that did not get appropriate L([OII]) fits.
-        bgs_mask = [i in bgs_tids for i in self.fsfData['TARGETID']]
+        bgs_mask = np.isin(self.fsfData['TARGETID'], bgs_tids)
+        #bgs_mask = [i in bgs_tids for i in self.fsfData['TARGETID']]
 
+        print("making filters by redshift...")
         self.bgs_mask_hiz = np.logical_and(bgs_mask, self.fsfData['OII_COMBINED_LUMINOSITY_LOG'] > 0)
         self.bgs_mask = np.logical_and(self.bgs_mask_hiz, self.fsfData['Z'] < .6)  # can change redshift limit here - .6 is supposed to be the limit but there are many sources up to .8
         # bgs_mask is a boolean array that gets applied to the fsfData array to select data from good targets
@@ -483,19 +486,26 @@ class FSFCat:
             full_mask = np.logical_and(z_mask, self.bgs_mask)
         else:
             full_mask = self.bgs_mask
+
+        full_mask = generate_combined_mask([full_mask, self.fsfData['OII_SUMMED_SNR'] > 3])
+
         r_band = self.fsfData['ABSMAG01_SDSS_R'][full_mask]
         g_band = self.fsfData['ABSMAG01_SDSS_G'][full_mask]
         colors = g_band - r_band
         oii_luminosity = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][full_mask]
         redshift = self.fsfData['Z'][full_mask]
-
-        plt.scatter(colors, oii_luminosity, c=redshift, marker='.', alpha=0.3)
+        if zrange:
+            plt.scatter(colors, oii_luminosity, c=redshift, marker='.', alpha=0.3)
+        else:
+            plt.scatter(colors, oii_luminosity, c=redshift, marker='.', alpha=0.3, vmax=0.4)
         plt.xlabel("g-r")
         plt.ylabel(r"$L_{[OII]}$ (combined)")
         plt.title(r'$L_{[OII]}$ vs color')
+        plt.xlim(-.9,2)
+        plt.ylim(36,43)
         plt.colorbar(label="Z")
         if zrange:
-            plt.savefig(f'figures/oii_luminosity_vs_g-r_color_z={zrange}.png')
+            plt.savefig('figures/oii_luminosity_vs_g-r_color_z=({:.1f}'.format(zrange[0]) + ',{:.1f}'.format(zrange[1]) + ').png')
         else:
             plt.savefig(f'figures/oii_luminosity_vs_g-r_color.png')
 
@@ -543,6 +553,8 @@ class FSFCat:
         :return: None
         """
 
+        print("making bpt diagram...")
+
         nii = self.fsfData['NII_6584_FLUX'][self.bgs_mask]
         ha = self.fsfData['HALPHA_FLUX'][self.bgs_mask]
         oiii = self.fsfData['OIII_5007_FLUX'][self.bgs_mask]
@@ -551,34 +563,52 @@ class FSFCat:
         # removing all cases where the selected line flux is zero, since log(0) and x/0 are undefined
         zero_mask = generate_combined_mask([nii != 0.0, ha != 0.0, oiii != 0.0, hb != 0.0])
 
-        print(sum(nii[zero_mask] == 0.0), sum(ha[zero_mask] == 0.0), sum(oiii[zero_mask] == 0.0), sum(hb[zero_mask] == 0.0))
+        #print(sum(nii[zero_mask] == 0.0), sum(ha[zero_mask] == 0.0), sum(oiii[zero_mask] == 0.0), sum(hb[zero_mask] == 0.0))
 
-        x_for_line_1 = np.log10(np.logspace(-10,.049,500))
+        # Getting the highest and lowest OII luminosity for the high SNR (>3) sources to use as the limits for the color bar. Otherwise its all basically just one color
+        oii_lum = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][self.bgs_mask]
+        #hisnr_oii_lum = oii_lum[self.fsfData['OII_SUMMED_SNR'][self.bgs_mask] > 3]
+        #max_oii_lum = max(hisnr_oii_lum)
+        #min_oii_lum = min(hisnr_oii_lum)
+
+        oii_lum = oii_lum[zero_mask]
+
+
+        x_for_line_1 = np.log10(np.logspace(-5,.049,300))
         hii_agn_line = 0.61/(x_for_line_1 - 0.05) + 1.3
 
-        x_for_line_2 = np.log10(np.logspace(-10, 0.45, 500))
-        agn_line_2 = 0.61/(x_for_line_2 - 0.47) + 1.19
+        x_for_line_2 = np.log10(np.logspace(-5, 0.46, 300))
+        composite_line_2 = 0.61/(x_for_line_2 - 0.47) + 1.19
 
+        x_for_line_3 = np.linspace(-.13,2,100)
+        agn_line_3 = 2.144507*x_for_line_3 + 0.465028
+
+        """
         tids = self.fsfData['TARGETID'][self.bgs_mask]
+        #this goes through all the tids and writes them to a file if they are in the "agn" region
         with open('possible_agn_tids.txt', 'w') as f:
             for i in range(len(tids[zero_mask])):
-                if np.log10(nii[zero_mask][i]/ha[zero_mask][i]) < 0 and np.log10(oiii[zero_mask][i]/hb[zero_mask][i]) > 1:
+                x = np.log10(nii[zero_mask][i]/ha[zero_mask][i])
+                y = np.log10(oiii[zero_mask][i]/hb[zero_mask][i])
+                if y > 0.61/(x - 0.47) + 1.19 and y > 2.144507*x + 0.465028:
                     f.write(f"{tids[zero_mask][i]}\n")
-
+        """
         # the third line does not appear in the paper cited... not sure where it comes from
 
-        plt.scatter(np.log10(nii[zero_mask]/ha[zero_mask]), np.log10(oiii[zero_mask]/hb[zero_mask]), marker='.', alpha=0.3)
+        plt.scatter(np.log10(nii[zero_mask]/ha[zero_mask]), np.log10(oiii[zero_mask]/hb[zero_mask]), marker='.', alpha=0.3, c=oii_lum, vmax=41.5, vmin=39)
         plt.plot(x_for_line_1, hii_agn_line, linestyle='dashed', color='k')
-        plt.plot(x_for_line_2, agn_line_2, linestyle='dotted', color='r')
+        plt.plot(x_for_line_2, composite_line_2, linestyle='dotted', color='r')
+        plt.plot(x_for_line_3, agn_line_3, linestyle='dashdot', color='b')
         plt.text(-1.3, -1.1, "H II", fontweight='bold')
         plt.text(-.15, -1.7, "Composite", fontweight='bold')
         plt.text(-1.0, 1.5, "AGN", fontweight='bold')
         plt.text(0.5, -1.4, "Shocks", fontweight='bold')
         plt.xlim(-2, 1)
         plt.ylim(-2, 2)
-        plt.xlabel(r'$\log([N II] \lambda 6584 / H\alpha$')
-        plt.ylabel(r'$\log([O III] \lambda 5007 / H\beta$')
-        plt.savefig('figures/bpt_bgs_sv3.png')
+        plt.colorbar(label=r"$\log{L_{[OII]}}$")
+        plt.xlabel(r'$\log([N II]_{\lambda 6584} / H\alpha)$')
+        plt.ylabel(r'$\log([O III]_{\lambda 5007} / H\beta)$')
+        plt.savefig('figures/bpt_bgs_sv3.png',dpi=800)
         plt.show()
 
     def generate_all_figs(self):
@@ -632,8 +662,12 @@ if __name__ == '__main__':
     catalog = FSFCat()
     #catalog.calculate_oii_rat_snr(1)  # the argument is the naive snr calculation to use
     #catalog.generate_all_figs()
-    #catalog.plot_oii_lum_vs_color()
+    #for i in np.arange(0,.5, .1):
+    #    catalog.plot_oii_lum_vs_color(zrange=[i,i+.1])
     #catalog.plot_oii_rat_vs_redshift()
-    catalog.plot_oii_rat_vs_stellar_mass(snr_lim=1)
+    #catalog.plot_oii_rat_vs_stellar_mass(snr_lim=1)
     #catalog.report_all_zero_rat()
-    #catalog.plot_bpt_diag()
+    catalog.plot_bpt_diag()
+    #oii_lum = catalog.fsfData['OII_COMBINED_LUMINOSITY_LOG'][catalog.bgs_mask]
+    #tid = catalog.fsfData['TARGETID'][catalog.bgs_mask]
+    #print(tid[oii_lum < 32.5])
