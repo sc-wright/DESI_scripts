@@ -11,7 +11,7 @@ from astropy.table import Table
 
 import pandas as pd
 
-from utility_scripts import get_lum
+from utility_scripts import get_lum, generate_combined_mask
 
 import time
 
@@ -403,7 +403,7 @@ class FSFCat:
         plt.show()
         #plt.clf()
 
-    def plot_oii_rat_vs_stellar_mass(self, mass_range=False, snr_lim=False):
+    def plot_oii_rat_vs_stellar_mass(self, mass_range=False, snr_lim=False, plt_col='redshift'):
         """
         Plots the OII doublet ratio vs the stellar mass with a histogram of the ratios
         Note: Stellar mass may be overestimated in v3.2 of the fastspecfit catalog
@@ -417,29 +417,40 @@ class FSFCat:
             self.calculate_oii_rat_snr(snr_lim, plot=False)
             oii_rat = self.fsfData['OII_DOUBLET_RATIO'][self.snr_bgs_mask]
             stellar_mass = self.fsfData['LOGMSTAR'][self.snr_bgs_mask]
-            redshift = self.fsfData['Z'][self.snr_bgs_mask]
+            if plt_col == 'redshift':
+                colr = self.fsfData['Z'][self.snr_bgs_mask]
+            if plt_col == 'loii':
+                colr = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][self.snr_bgs_mask]
         else:
             oii_rat = self.fsfData['OII_DOUBLET_RATIO'][self.bgs_mask]
             stellar_mass = self.fsfData['LOGMSTAR'][self.bgs_mask]
-            redshift = self.fsfData['Z'][self.bgs_mask]
+            if plt_col == 'redshift':
+                colr = self.fsfData['Z'][self.bgs_mask]
+            if plt_col == 'loii':
+                colr = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][self.bgs_mask]
 
         if mass_range:
-            plot_mask = generate_combined_mask(stellar_mass >= mass_range[0], stellar_mass < mass_range[0])
+            plot_mask = generate_combined_mask([stellar_mass >= mass_range[0], stellar_mass < mass_range[1]])
         else:
             plot_mask = np.ones(len(stellar_mass), dtype=bool)
 
-        fig = plt.figure(figsize=(8, 8))
+        fig = plt.figure(figsize=(8, 10))
         gs = GridSpec(2, 4)
         ax_main = plt.subplot(gs[0:2,:3])
-        #ax_xDist = plt.subplot(gs[0, :2], sharex=ax_main)
         ax_yDist = plt.subplot(gs[0:2,3], sharey=ax_main)
-        plt.subplots_adjust(wspace=.0)
+        plt.subplots_adjust(wspace=.0, top=0.99)
+        axs = [ax_main, ax_yDist]
 
-        ax_main.scatter(stellar_mass[plot_mask], oii_rat[plot_mask], c=redshift[plot_mask], marker='.', alpha=0.3)
-        ax_main.set(xlabel=r"$\log{M_{\star}}$", ylabel="$\lambda 3726 / \lambda 3729$")
+        if plt_col == 'redshift':
+            sp = ax_main.scatter(stellar_mass[plot_mask], oii_rat[plot_mask], c=colr[plot_mask], marker='.', alpha=0.3,
+                                 vmax=0.6, vmin=0.0)
+            fig.colorbar(sp, ax=axs, label="Z", location='top')
+        elif plt_col == 'loii':
+            sp = ax_main.scatter(stellar_mass[plot_mask], oii_rat[plot_mask], c=colr[plot_mask], marker='.', alpha=0.3,
+                                 vmax=41.5, vmin=39)
+            fig.colorbar(sp, ax=axs, label=r"$L_{[OII]}$", location='top')
 
-        #ax_xDist.hist(stellar_mass, bins=100, align='mid')
-        #ax_xDist.set(ylabel='count')
+        ax_main.set(xlabel=r"$\log{M_{\star}}$", ylabel="$\lambda 3726 / \lambda 3729$", ylim=(0, 2))
 
         ax_yDist.hist(oii_rat[plot_mask], bins=100, orientation='horizontal', align='mid')
         ax_yDist.set(xlabel='count')
@@ -447,17 +458,26 @@ class FSFCat:
         ax_yDist.invert_xaxis()
         ax_yDist.yaxis.tick_right()
 
-        plt.savefig("figures/oii_ratio_vs_mass.png")
-
+        if mass_range:
+            if plt_col=='redshift':
+                plt.savefig('figures/oii_ratio_vs_mass_zcol_m=({:.1f}'.format(mass_range[0]) + ',{:.1f}'.format(mass_range[1]) + ').png')
+            elif plt_col == 'loii':
+                plt.savefig('figures/oii_ratio_vs_mass_loiicol_m=({:.1f}'.format(mass_range[0]) + ',{:.1f}'.format(mass_range[1]) + ').png')
+        else:
+            if plt_col == 'redshift':
+                plt.savefig("figures/oii_ratio_vs_mass_zcol.png")
+            elif plt_col == 'loii':
+                plt.savefig("figures/oii_ratio_vs_mass_loiicol.png")
         plt.show()
 
 
-    def plot_oii_rat_vs_oii_flux(self):
+    def plot_oii_rat_vs_oii_flux_old(self):
         """
         Plots the OII amplitude ratio vs the total oii flux with redshift as a color axis
 
         :return: None
         """
+
         oii_rat = self.fsfData['OII_DOUBLET_RATIO'][self.bgs_mask]
         oii_flux = self.fsfData['OII_3726_FLUX'][self.bgs_mask] + self.fsfData['OII_3729_FLUX'][self.bgs_mask]
         redshift = self.fsfData['Z'][self.bgs_mask]
@@ -470,6 +490,74 @@ class FSFCat:
         plt.savefig("figures/oii_ratio_vs_oii_flux.png")
         plt.show()
         plt.clf()
+
+    def plot_oii_rat_vs_oii_flux(self, mass_range=False, redshift_range=False, snr_lim=1, plt_col='redshift'):
+
+        self.calculate_oii_rat_snr(snr_lim, plot=False)
+
+        if snr_lim:
+            local_mask = self.snr_bgs_mask
+        else:
+            local_mask = self.bgs_mask
+
+        oii_rat = self.fsfData['OII_DOUBLET_RATIO'][local_mask]
+        loii = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][local_mask]
+        redshift = self.fsfData['Z'][local_mask]
+        stellar_mass = self.fsfData['LOGMSTAR'][local_mask]
+
+        if mass_range:
+            plot_mask = generate_combined_mask([stellar_mass >= mass_range[0], stellar_mass < mass_range[1]])
+        else:
+            plot_mask = np.ones(len(stellar_mass), dtype=bool)
+
+        if redshift_range:
+            plot_mask = generate_combined_mask([redshift >= redshift_range[0], redshift < redshift_range[1]])
+        else:
+            plot_mask = np.ones(len(redshift), dtype=bool)
+
+        fig = plt.figure(figsize=(8, 10))
+        gs = GridSpec(2, 4)
+        ax_main = plt.subplot(gs[0:2,:3])
+        ax_yDist = plt.subplot(gs[0:2,3], sharey=ax_main)
+        plt.subplots_adjust(wspace=.0, top=0.99)
+        axs = [ax_main, ax_yDist]
+
+        if plt_col == 'redshift':
+            sp = ax_main.scatter(loii[plot_mask], oii_rat[plot_mask], c=redshift[plot_mask], marker='.', alpha=0.3,
+                                 vmax=0.6, vmin=0.0)
+            fig.colorbar(sp, ax=axs, label="Z", location='top')
+        elif plt_col == 'loii':
+            sp = ax_main.scatter(loii[plot_mask], oii_rat[plot_mask], c=stellar_mass[plot_mask], marker='.', alpha=0.3,
+                                 vmax=41.5, vmin=39)
+            fig.colorbar(sp, ax=axs, label=r"$\log{M_{\star}}$", location='top')
+
+        ax_main.set(xlabel=r"$L_{[OII]}$", ylabel="$\lambda 3726 / \lambda 3729$", ylim=(0, 2))
+
+        ax_yDist.hist(oii_rat[plot_mask], bins=100, orientation='horizontal', align='mid')
+        ax_yDist.set(xlabel='count')
+
+        ax_yDist.invert_xaxis()
+        ax_yDist.yaxis.tick_right()
+
+        if mass_range:
+            if plt_col=='redshift':
+                plt.savefig('figures/oii_ratio_vs_loii_zcol_m=({:.1f}'.format(mass_range[0]) + ',{:.1f}'.format(mass_range[1]) + ').png')
+            elif plt_col == 'mass':
+                plt.savefig('figures/oii_ratio_vs_loii_masscol_m=({:.1f}'.format(mass_range[0]) + ',{:.1f}'.format(mass_range[1]) + ').png')
+        elif redshift_range:
+            if plt_col == 'redshift':
+                plt.savefig('figures/oii_ratio_vs_loii_zcol_m=({:.1f}'.format(redshift_range[0]) + ',{:.1f}'.format(
+                    redshift_range[1]) + ').png')
+            elif plt_col == 'mass':
+                plt.savefig('figures/oii_ratio_vs_loii_masscol_m=({:.1f}'.format(redshift_range[0]) + ',{:.1f}'.format(
+                    redshift_range[1]) + ').png')
+        else:
+            if plt_col == 'redshift':
+                plt.savefig("figures/oii_ratio_vs_loii_zcol.png")
+            elif plt_col == 'mass':
+                plt.savefig("figures/oii_ratio_vs_loii_masscol.png")
+        plt.show()
+
 
     def plot_oii_lum_vs_color(self, zrange = False):
         """
@@ -521,13 +609,15 @@ class FSFCat:
         :param zrange: bool or tuple with 2 numbers: if given, low and high end of redshift range to plot, respectively. Otherwise plots bgs_mask range
         :return: None
         """
+        self.calculate_oii_rat_snr(1, plot=False)
         if zrange:
             loz_mask = self.fsfData['Z'] >= zrange[0]
             hiz_mask = self.fsfData['Z'] < zrange[1]
             z_mask = np.logical_and(loz_mask, hiz_mask)
-            full_mask = np.logical_and(z_mask, self.bgs_mask)
+            full_mask = np.logical_and(z_mask, self.snr_bgs_mask)
         else:
-            full_mask = self.bgs_mask
+            full_mask = self.snr_bgs_mask
+
 
         oii_rat = self.fsfData['OII_DOUBLET_RATIO'][full_mask]
         redshift = self.fsfData['Z'][full_mask]
@@ -545,11 +635,10 @@ class FSFCat:
         plt.show()
         plt.clf()
 
-    def plot_bpt_diag(self):
+    def plot_bpt_diag(self, write_to_file=False):
         """
         Plots line ratios in bpt-style diagram with AGN/HII separator lines from Kewley et al. (2001) and Kauffmann et al. (2003)
 
-        todo: there's a third line in the textbook. No clue where it comes from. Find it?
         :return: None
         """
 
@@ -583,16 +672,16 @@ class FSFCat:
         x_for_line_3 = np.linspace(-.13,2,100)
         agn_line_3 = 2.144507*x_for_line_3 + 0.465028
 
-        """
-        tids = self.fsfData['TARGETID'][self.bgs_mask]
-        #this goes through all the tids and writes them to a file if they are in the "agn" region
-        with open('possible_agn_tids.txt', 'w') as f:
-            for i in range(len(tids[zero_mask])):
-                x = np.log10(nii[zero_mask][i]/ha[zero_mask][i])
-                y = np.log10(oiii[zero_mask][i]/hb[zero_mask][i])
-                if y > 0.61/(x - 0.47) + 1.19 and y > 2.144507*x + 0.465028:
-                    f.write(f"{tids[zero_mask][i]}\n")
-        """
+        if write_to_file:
+            tids = self.fsfData['TARGETID'][self.bgs_mask]
+            #this goes through all the tids and writes them to a file if they are in the "agn" region
+            with open('possible_agn_tids.txt', 'w') as f:
+                for i in range(len(tids[zero_mask])):
+                    x = np.log10(nii[zero_mask][i]/ha[zero_mask][i])
+                    y = np.log10(oiii[zero_mask][i]/hb[zero_mask][i])
+                    if y > 0.61/(x - 0.47) + 1.19 and y > 2.144507*x + 0.465028:
+                        f.write(f"{tids[zero_mask][i]}\n")
+
         # the third line does not appear in the paper cited... not sure where it comes from
 
         plt.scatter(np.log10(nii[zero_mask]/ha[zero_mask]), np.log10(oiii[zero_mask]/hb[zero_mask]), marker='.', alpha=0.3, c=oii_lum, vmax=41.5, vmin=39)
@@ -643,31 +732,20 @@ class FSFCat:
             for tid in zoii:
                 f.write(f"{tid}\n")
 
-def generate_combined_mask(masks):
-    """
-    Creates a new boolean array by combining every array in the masks list using 'and' logic
-
-    :param masks: list: a list with at least one element. Each element is a boolean array of equal length
-    :return: A single boolean array that is the 'and' logical combination of all the input arrays
-    """
-    # masks is a list with at least one element. Each element is a boolean array of equal length
-    length = len(masks[0])
-    full_mask = np.ones(length, dtype=bool)
-    for mask in masks:
-        full_mask = np.logical_and(full_mask, mask)
-    return full_mask
-
 
 if __name__ == '__main__':
     catalog = FSFCat()
     #catalog.calculate_oii_rat_snr(1)  # the argument is the naive snr calculation to use
     #catalog.generate_all_figs()
-    #for i in np.arange(0,.5, .1):
-    #    catalog.plot_oii_lum_vs_color(zrange=[i,i+.1])
+    for i in np.arange(0,.5, .1):
+        catalog.plot_oii_lum_vs_color(zrange=[i,i+.1])
     #catalog.plot_oii_rat_vs_redshift()
-    #catalog.plot_oii_rat_vs_stellar_mass(snr_lim=1)
+    catalog.plot_oii_rat_vs_stellar_mass(snr_lim=1, plt_col='loii')
+    catalog.plot_oii_rat_vs_stellar_mass(snr_lim=1, plt_col='redshift')
+    for i in np.arange(7,12):
+        catalog.plot_oii_rat_vs_stellar_mass(mass_range=[i, i+1] ,snr_lim=1, plt_col='redshift')
     #catalog.report_all_zero_rat()
-    catalog.plot_bpt_diag()
+    #catalog.plot_bpt_diag(write_to_file=False)
     #oii_lum = catalog.fsfData['OII_COMBINED_LUMINOSITY_LOG'][catalog.bgs_mask]
     #tid = catalog.fsfData['TARGETID'][catalog.bgs_mask]
     #print(tid[oii_lum < 32.5])

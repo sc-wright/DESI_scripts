@@ -68,6 +68,19 @@ def get_lum(f, z):
     f = f * 1E-17 #flux in erg/cm^2 now
     return f*4*np.pi*D_l**2
 
+def generate_combined_mask(masks):
+    """
+    Creates a new boolean array by combining every array in the masks list using 'and' logic
+
+    :param masks: list: a list with at least one element. Each element is a boolean array of equal length
+    :return: A single boolean array that is the 'and' logical combination of all the input arrays
+    """
+    # masks is a list with at least one element. Each element is a boolean array of equal length
+    length = len(masks[0])
+    full_mask = np.ones(length, dtype=bool)
+    for mask in masks:
+        full_mask = np.logical_and(full_mask, mask)
+    return full_mask
 
 def testfastqa():
     os.system(f"fastqa --targetids ")
