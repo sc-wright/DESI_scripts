@@ -2,6 +2,7 @@ import os
 import mks
 
 import matplotlib.pyplot as plt
+import matplotlib.transforms as transforms
 import numpy as np
 from astropy.convolution import convolve, Gaussian1DKernel
 from astropy.table import Table
@@ -235,7 +236,7 @@ class FSFCat:
         # write_table_to_disk(table)
 
 
-class Spectra:
+class Spectrum:
     def __init__(self, targetid='random'):
 
         print("reading in table...")
@@ -312,11 +313,26 @@ class Spectra:
                 print("more than one matching targetid was found in the fastspec table. please check the data.")
                 return 6
             oii_rat = data['OII_DOUBLET_RATIO'][fsf_target_mask][0]
-            #oii_rat_uncert = data['OII_DOUB']
-            oii_vshift = data['OII_3726_VSHIFT'][fsf_target_mask][0]
-            oii_zshift = oii_vshift*1000/mks.c + 1
+            oii_snr_26 = data['OII_3726_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['OII_3726_AMP_IVAR'][fsf_target_mask][0])
+            oii_snr_29 = data['OII_3729_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['OII_3729_AMP_IVAR'][fsf_target_mask][0])
+
+            #oii_vshift = data['OII_3726_VSHIFT'][fsf_target_mask][0]
+            #oii_zshift = oii_vshift*1000/mks.c + 1
+
 
             sii_rat = data['SII_DOUBLET_RATIO'][fsf_target_mask][0]
+            sii_snr_16 = data['SII_6716_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['SII_6716_AMP_IVAR'][fsf_target_mask][0])
+            sii_snr_31 = data['SII_6731_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['SII_6731_AMP_IVAR'][fsf_target_mask][0])
+
+            #print(data['SII_6716_AMP'][fsf_target_mask][0], data['SII_6716_AMP_IVAR'][fsf_target_mask][0])
+
+            neiii_snr = data['NEIII_3869_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['NEIII_3869_AMP_IVAR'][fsf_target_mask][0])
+            hb_snr = data['HBETA_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['HBETA_AMP_IVAR'][fsf_target_mask][0])
+            oiii59_snr = data['OIII_4959_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['OIII_4959_AMP_IVAR'][fsf_target_mask][0])
+            oiii07_snr = data['OIII_5007_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['OIII_5007_AMP_IVAR'][fsf_target_mask][0])
+            nii48_snr = data['NII_6548_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['NII_6548_AMP_IVAR'][fsf_target_mask][0])
+            ha_snr = data['HALPHA_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['HALPHA_AMP_IVAR'][fsf_target_mask][0])
+            nii84_snr = data['NII_6584_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['NII_6584_AMP_IVAR'][fsf_target_mask][0])
 
             models, hdr = fitsio.read(fastfile, 'MODELS', header=True)
             models = models[meta['TARGETID'] == self.targetid]
@@ -327,7 +343,7 @@ class Spectra:
             line_names = [r'$[OII]$', r'$[OIII]$', r'$[OIII]$', r'$H\alpha$', r'$H\beta$', r'$H\gamma$',
                           r'$H\delta$', r'$[SII]$', r'$[SII]$', r'$CaII H$', r'$CaII K$', r'$[NII]$',
                           r'$[NII]$', r'$[NeIII]$']
-            line_vals = [3727, 4959, 5007, 6563, 4861, 4340, 4102, 6716, 6731, 3933, 3968, 6548, 6584, 3869]
+            line_vals = [3728.48, 4960.2937, 5008.2383, 6564.613, 4862.683, 4341.684, 4102.892, 6718.2913, 6732.6705, 3933, 3968, 6549.8578, 6585.2696, 3869.8611]
 
             #lines = {line_names[i]: line_vals[i] for i in range(len(line_names))}
 
@@ -335,19 +351,19 @@ class Spectra:
             spec_hi = 7000
 
             nev_limit = 15
-            oii_limit = 10
+            oii_limit = 8
             hb_limit = 10
             oiii_limit = 35
             nii_limit = 25
             sii_limit = 20
 
             # this is the wl to use as the center of the subfig
-            oii_line = 3727.5
-            sii_line = (6716 + 6731) / 2
-            nii_line = 6566 # average of the 3 lines showing in that subfig
-            oiii_line = (4959 + 5007) / 2
-            hb_line = 4861
-            nev_line = 3869
+            oii_line = (3727.0919 + 3729.8750) / 2
+            sii_line = (6718.2913 + 6732.6705) / 2
+            nii_line = (6549.8578 + 6564.613 + 6585.2696) / 3 # average of the 3 lines showing in that subfig
+            oiii_line = (4960.2937 + 5008.2383) / 2
+            hb_line = 4862.683
+            nev_line = 3869.8611
 
             # buff determines how much space to put above and below the top of the lines
             buff = 0.15
@@ -470,17 +486,18 @@ class Spectra:
             ax1.set_xlim([spec_lo, spec_hi])
             ax1.set_ylim([full_y_bottom, full_y_top])
             lastline = 0
-            vertpos = 0.6
+            vertpos = 0.90
+            trans = transforms.blended_transform_factory(ax1.transData, ax1.transAxes)
             for line, name in sorted(zip(line_vals, line_names)):
                 if line - lastline < 70:
-                    vertpos -=.08
+                    vertpos -=.06
                 else:
-                    vertpos = 0.6
+                    vertpos = 0.90
                 ax1.axvline(x = line, linestyle='dashed', lw = 0.8, alpha=0.4)
-                ax1.text(line+8, full_y_range*vertpos, name,
+                ax1.text(line+8, vertpos, name,
                          horizontalalignment='left',
                          verticalalignment='center',
-                         fontsize=8)
+                         fontsize=8, transform=trans)
                 lastline = line
             if zflag:
                 ax1.text(0.005, 1.01, f'targetid: {self.targetid}, z = {zFact-1}*, survey = {survey}, program = {program}',
@@ -505,12 +522,13 @@ class Spectra:
             ax2.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
             ax2.set_xlim([oii_line-oii_limit, oii_line+oii_limit])
             ax2.set_ylim([oii_y_bottom, oii_y_top])
-            ax2.text(0.995, 0.975, f'[O II]/[O II]\n' + '{0:.4f}'.format(oii_rat),
+            ax2.text(0.995, 0.975, f'[O II]/[O II]\n' + 'ratio: {0:.4f}\n'.format(oii_rat) + 'SNR: {0:.1f}'.format(oii_snr_26) + ', {0:.1f}'.format(oii_snr_29),
                      horizontalalignment='right',
                      verticalalignment='top',
                      transform=ax2.transAxes)
-            ax2.axvline(3726.1, linestyle='dashed', lw = 0.8, alpha=0.4)
-            ax2.axvline(3728.8, linestyle='dashed', lw = 0.8, alpha=0.4)
+
+            ax2.axvline(3727.0919, linestyle='dashed', lw = 0.8, alpha=0.4)
+            ax2.axvline(3729.8750, linestyle='dashed', lw = 0.8, alpha=0.4)
             ax2.set_xlabel(r'$\lambda_{rest}$')
 
 
@@ -523,11 +541,11 @@ class Spectra:
             ax3.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
             ax3.set_xlim([nev_line-nev_limit, nev_line+nev_limit])
             ax3.set_ylim([nev_y_bottom, nev_y_top])
-            ax3.text(0.995, 0.975, f'[Ne III]',
+            ax3.text(0.995, 0.975, f'[Ne III]\n' + 'SNR: {0:.1f}'.format(neiii_snr),
                      horizontalalignment='right',
                      verticalalignment='top',
                      transform=ax3.transAxes)
-            ax3.axvline(3869, linestyle='dashed', lw = 0.8, alpha=0.4)
+            ax3.axvline(3869.8611, linestyle='dashed', lw = 0.8, alpha=0.4)
             ax3.set_xlabel(r'$\lambda_{rest}$')
 
 
@@ -539,11 +557,11 @@ class Spectra:
             ax4.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
             ax4.set_xlim([hb_line-hb_limit, hb_line+hb_limit])
             ax4.set_ylim([hb_y_bottom, hb_y_top])
-            ax4.text(0.995, 0.975, r'$H \beta$',
+            ax4.text(0.995, 0.975, r'$H \beta$' + '\nSNR: {0:.1f}'.format(hb_snr),
                      horizontalalignment='right',
                      verticalalignment='top',
                      transform=ax4.transAxes)
-            ax4.axvline(4861, linestyle='dashed', lw = 0.8, alpha=0.4)
+            ax4.axvline(4862.683, linestyle='dashed', lw = 0.8, alpha=0.4)
             ax4.set_xlabel(r'$\lambda_{rest}$')
 
 
@@ -555,12 +573,12 @@ class Spectra:
             ax5.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
             ax5.set_xlim([oiii_line - oiii_limit, oiii_line + oiii_limit])
             ax5.set_ylim([oiii_y_bottom, oiii_y_top])
-            ax5.text(0.995, 0.975, r'[O III]/[O III]',
+            ax5.text(0.995, 0.975, '[O III]/[O III]\n' + 'SNR: {0:.1f}'.format(oiii59_snr) + ', {0:.1f}'.format(oiii07_snr),
                      horizontalalignment='right',
                      verticalalignment='top',
                      transform=ax5.transAxes)
-            ax5.axvline(4959, linestyle='dashed', lw = 0.8, alpha=0.4)
-            ax5.axvline(5007, linestyle='dashed', lw = 0.8, alpha=0.4)
+            ax5.axvline(4960.2937, linestyle='dashed', lw = 0.8, alpha=0.4)
+            ax5.axvline(5008.2383, linestyle='dashed', lw = 0.8, alpha=0.4)
             ax5.set_xlabel(r'$\lambda_{rest}$')
 
 
@@ -573,13 +591,13 @@ class Spectra:
 
             ax6.set_xlim([nii_line-nii_limit, nii_line+nii_limit])
             ax6.set_ylim([nii_y_bottom, nii_y_top])
-            ax6.text(0.995, 0.975, fr'[N II]/H$\alpha$/[N II]',
+            ax6.text(0.995, 0.975, fr'[N II]/H$\alpha$/[N II]' + '\nSNR: {0:.1f}'.format(nii48_snr) + ', {0:.1f}'.format(ha_snr) + ', {0:.1f}'.format(nii84_snr),
                      horizontalalignment='right',
                      verticalalignment='top',
                      transform=ax6.transAxes)
-            ax6.axvline(6548, linestyle='dashed', lw = 0.8, alpha=0.4)
-            ax6.axvline(6563, linestyle='dashed', lw = 0.8, alpha=0.4)
-            ax6.axvline(6584, linestyle='dashed', lw = 0.8, alpha=0.4)
+            ax6.axvline(6549.8578, linestyle='dashed', lw = 0.8, alpha=0.4)
+            ax6.axvline(6564.613, linestyle='dashed', lw = 0.8, alpha=0.4)
+            ax6.axvline(6585.2696, linestyle='dashed', lw = 0.8, alpha=0.4)
             ax6.set_xlabel(r'$\lambda_{rest}$')
 
 
@@ -591,12 +609,12 @@ class Spectra:
             ax7.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
             ax7.set_xlim([sii_line - sii_limit, sii_line + sii_limit])
             ax7.set_ylim([sii_y_bottom, sii_y_top])
-            ax7.text(0.995, 0.975, f'[SII]/[SII]\n' + '{0:.4f}'.format(sii_rat),
+            ax7.text(0.995, 0.975, f'[SII]/[SII]\n' + '{0:.4f}\n'.format(sii_rat) + 'SNR: {0:.1f}'.format(sii_snr_16) + ', {0:.1f}'.format(sii_snr_31),
                      horizontalalignment='right',
                      verticalalignment='top',
                      transform=ax7.transAxes)
-            ax7.axvline(6716, linestyle='dashed', lw = 0.8, alpha=0.4)
-            ax7.axvline(6731, linestyle='dashed', lw = 0.8, alpha=0.4)
+            ax7.axvline(6718.2913, linestyle='dashed', lw = 0.8, alpha=0.4)
+            ax7.axvline(6732.6705, linestyle='dashed', lw = 0.8, alpha=0.4)
             ax7.set_xlabel(r'$\lambda_{rest}$')
 
 
@@ -771,17 +789,17 @@ def spec_plot():
     #targetid = 39627806480531653
     #targetid = 39627746007056970
 
-    with open('possible_agn_tids.txt', 'r') as f:
-        tid_list = f.readlines()
-    for i in range(len(tid_list)//50):
-        tid = int(tid_list[i])
-        spec = Spectra(targetid=tid)
-        spec.check_for_files()
-        spec.plot_spectrum(foldstruct="spectra/possible_agn/")
+    #with open('possible_agn_tids.txt', 'r') as f:
+    #    tid_list = f.readlines()
+    #for i in range(len(tid_list)//50):
+    #    tid = int(tid_list[i])
+    #    spec = Spectra(targetid=tid)
+    #    spec.check_for_files()
+    #    spec.plot_spectrum(foldstruct="spectra/possible_agn/")
 
-    #spec = Spectra(targetid=39627746007056970)
-    #spec.check_for_files()
-    #spec.plot_spectrum()  # this makes the plot and saves it
+    spec = Spectrum(targetid=39627734053293709)
+    spec.check_for_files()
+    spec.plot_spectrum()  # this makes the plot and saves it
     #spec.gen_qa_fig()
     #spec.fetch_models()
 

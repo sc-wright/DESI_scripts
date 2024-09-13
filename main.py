@@ -729,7 +729,7 @@ def main():
         write_table_to_disk(fsfData)
     """
 
-    spec_type_in_fsf()
+    #spec_type_in_fsf()
 
     #plot_lum_vs_redshift(fsfData)
     #plot_lum_redshift_snr_color(fsfData)
@@ -750,6 +750,8 @@ def main():
     #print(fsfData['ISBGS'][:20])
     #print(fsfData['ISELG'][:20])
     #print(fsfData['TARGETID'][fsfData['ISBGS']])
+
+    print("set 'run' to 'current file'.")
 
 if __name__ == '__main__':
     main()

@@ -68,7 +68,7 @@ def get_lum(f, z):
     f = f * 1E-17 #flux in erg/cm^2 now
     return f*4*np.pi*D_l**2
 
-def generate_combined_mask(masks):
+def generate_combined_mask(*masks):
     """
     Creates a new boolean array by combining every array in the masks list using 'and' logic
 

@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 plt.rcParams['text.usetex'] = True
 
+import seaborn as sns
+
 import numpy as np
 
 from astropy.convolution import convolve, Gaussian1DKernel
@@ -403,7 +405,145 @@ class FSFCat:
         plt.show()
         #plt.clf()
 
-    def plot_oii_rat_vs_stellar_mass(self, mass_range=False, snr_lim=False, plt_col='redshift'):
+    def plot_oii_rat_vs_stellar_mass(self, mass_range=False):
+        """
+        Plots the OII doublet ratio vs the stellar mass with a histogram of the ratios
+        Note: Stellar mass may be overestimated in v3.2 of the fastspecfit catalog
+
+        :param mass_range: tuple with 2 floats: low and high end of the mass range to plot, respectively
+        :return:
+        """
+
+        snr_lim = 7
+
+        full_mask = generate_combined_mask([self.bgs_mask, self.fsfData['OII_SUMMED_SNR'] > snr_lim])
+
+        oii_rat = self.fsfData['OII_DOUBLET_RATIO'][full_mask]
+        stellar_mass = self.fsfData['LOGMSTAR'][full_mask]
+        colr = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][full_mask]
+
+        if mass_range:
+            plot_mask = generate_combined_mask([stellar_mass >= mass_range[0], stellar_mass < mass_range[1]])
+        else:
+            plot_mask = np.ones(len(stellar_mass), dtype=bool)
+
+        fig = plt.figure(figsize=(8, 10))
+        gs = GridSpec(2, 4)
+        ax_main = plt.subplot(gs[0:2, :3])
+        ax_yDist = plt.subplot(gs[0:2, 3], sharey=ax_main)
+        plt.subplots_adjust(wspace=.0, top=0.99)
+        axs = [ax_main, ax_yDist]
+        sp = ax_main.scatter(stellar_mass[plot_mask], oii_rat[plot_mask], c=colr[plot_mask], marker='.', alpha=0.3, vmax=41.5, vmin=39)
+        fig.colorbar(sp, ax=axs, label=r"$L_{[OII]}$", location='top')
+        ax_main.text(0.005, 1.005, f'total: {sum(plot_mask)}, snr $>$ {snr_lim}',
+                 horizontalalignment='left',
+                 verticalalignment='bottom',
+                 transform=ax_main.transAxes)
+        ax_main.set(xlabel=r"$\log{M_{\star}}$", ylabel="$\lambda 3726 / \lambda 3729$", ylim=(0, 2))
+
+        ax_yDist.hist(oii_rat[plot_mask], bins=100, orientation='horizontal', align='mid')
+        ax_yDist.set(xlabel='count')
+
+        ax_yDist.invert_xaxis()
+        ax_yDist.yaxis.tick_right()
+
+        if mass_range:
+            plt.savefig('figures/oii_ratio_vs_mass_loiicol_m=({:.1f}'.format(mass_range[0]) + ',{:.1f}'.format(mass_range[1]) + ').png')
+        else:
+            plt.savefig("figures/oii_ratio_vs_mass_loiicol.png")
+        plt.show()
+
+    def plot_oii_rat_vs_stellar_mass_loii_bin(self, loii_range):
+        """
+        Plots the OII doublet ratio vs the stellar mass with a histogram of the ratios
+        Note: Stellar mass may be overestimated in v3.2 of the fastspecfit catalog
+
+        :param loii_range: tuple with 2 floats: low and high end of the luminosity range to plot, respectively
+        :return:
+        """
+
+        snr_lim = 7
+
+        full_mask = generate_combined_mask([self.bgs_mask, self.fsfData['OII_SUMMED_SNR'] > snr_lim])
+
+        oii_rat = self.fsfData['OII_DOUBLET_RATIO'][full_mask]
+        stellar_mass = self.fsfData['LOGMSTAR'][full_mask]
+        colr = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][full_mask]
+
+
+        plot_mask = generate_combined_mask([colr >= loii_range[0], colr < loii_range[1]])
+
+        fig = plt.figure(figsize=(8, 10))
+        gs = GridSpec(2, 4)
+        ax_main = plt.subplot(gs[0:2, :3])
+        ax_yDist = plt.subplot(gs[0:2, 3], sharey=ax_main)
+        plt.subplots_adjust(wspace=.0, top=0.99)
+        axs = [ax_main, ax_yDist]
+        sp = ax_main.scatter(stellar_mass[plot_mask], oii_rat[plot_mask], c=colr[plot_mask], marker='.', alpha=0.3, vmax=42, vmin=39)
+        fig.colorbar(sp, ax=axs, label=r"$L_{[OII]}$", location='top')
+        ax_main.text(0.005, 1.005, f'total: {sum(plot_mask)}, snr $>$ {snr_lim}, ${loii_range[0]} \leq$ ' +  r'$\log{L_{[OII]}}$' + f' $< {loii_range[1]}$',
+                 horizontalalignment='left',
+                 verticalalignment='bottom',
+                 transform=ax_main.transAxes)
+        ax_main.set(xlabel=r"$\log{M_{\star}}$", ylabel="$\lambda 3726 / \lambda 3729$", ylim=(0, 2))
+
+        ax_yDist.hist(oii_rat[plot_mask], bins=100, orientation='horizontal', align='mid')
+        ax_yDist.set(xlabel='count')
+
+        ax_yDist.invert_xaxis()
+        ax_yDist.yaxis.tick_right()
+
+        plt.savefig('figures/oii_ratio_vs_mass_loiicol_loii=({:.1f}'.format(loii_range[0]) + ',{:.1f}'.format(loii_range[1]) + ').png')
+
+        plt.show()
+
+
+    def plot_oii_rat_vs_stellar_mass_loii(self, loii_range):
+        """
+        Plots the OII doublet ratio vs the stellar mass with a histogram of the ratios
+        Note: Stellar mass may be overestimated in v3.2 of the fastspecfit catalog
+
+        :param loii_range: tuple with 2 floats: low and high end of the luminosity range to plot, respectively
+        :return:
+        """
+
+        snr_lim = 7
+
+        full_mask = generate_combined_mask([self.bgs_mask, self.fsfData['OII_SUMMED_SNR'] > snr_lim])
+
+        oii_rat = self.fsfData['OII_DOUBLET_RATIO'][full_mask]
+        stellar_mass = self.fsfData['LOGMSTAR'][full_mask]
+        colr = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][full_mask]
+
+
+        plot_mask = generate_combined_mask([colr >= loii_range[0], colr < loii_range[1]])
+
+        fig = plt.figure(figsize=(8, 10))
+        gs = GridSpec(2, 4)
+        ax_main = plt.subplot(gs[0:2, :3])
+        ax_yDist = plt.subplot(gs[0:2, 3], sharey=ax_main)
+        plt.subplots_adjust(wspace=.0, top=0.99)
+        axs = [ax_main, ax_yDist]
+        sp = ax_main.scatter(stellar_mass[plot_mask], oii_rat[plot_mask], c=colr[plot_mask], marker='.', alpha=0.3, vmax=42, vmin=39)
+        fig.colorbar(sp, ax=axs, label=r"$L_{[OII]}$", location='top')
+        ax_main.text(0.005, 1.005, f'total: {sum(plot_mask)}, snr $>$ {snr_lim}, ${loii_range[0]} \leq$ ' +  r'$\log{L_{[OII]}}$' + f' $< {loii_range[1]}$',
+                 horizontalalignment='left',
+                 verticalalignment='bottom',
+                 transform=ax_main.transAxes)
+        ax_main.set(xlabel=r"$\log{M_{\star}}$", ylabel="$\lambda 3726 / \lambda 3729$", ylim=(0, 2))
+
+        ax_yDist.hist(oii_rat[plot_mask], bins=100, orientation='horizontal', align='mid')
+        ax_yDist.set(xlabel='count')
+
+        ax_yDist.invert_xaxis()
+        ax_yDist.yaxis.tick_right()
+
+        plt.savefig('figures/oii_ratio_vs_mass_loiicol_loii=({:.1f}'.format(loii_range[0]) + ',{:.1f}'.format(loii_range[1]) + ').png')
+
+        plt.show()
+
+
+    def plot_oii_rat_vs_stellar_mass_old(self, mass_range=False, snr_lim=False, plt_col='redshift'):
         """
         Plots the OII doublet ratio vs the stellar mass with a histogram of the ratios
         Note: Stellar mass may be overestimated in v3.2 of the fastspecfit catalog
@@ -415,6 +555,7 @@ class FSFCat:
 
         if snr_lim:
             self.calculate_oii_rat_snr(snr_lim, plot=False)
+
             oii_rat = self.fsfData['OII_DOUBLET_RATIO'][self.snr_bgs_mask]
             stellar_mass = self.fsfData['LOGMSTAR'][self.snr_bgs_mask]
             if plt_col == 'redshift':
@@ -428,6 +569,8 @@ class FSFCat:
                 colr = self.fsfData['Z'][self.bgs_mask]
             if plt_col == 'loii':
                 colr = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][self.bgs_mask]
+
+
 
         if mass_range:
             plot_mask = generate_combined_mask([stellar_mass >= mass_range[0], stellar_mass < mass_range[1]])
@@ -507,10 +650,7 @@ class FSFCat:
 
         if mass_range:
             plot_mask = generate_combined_mask([stellar_mass >= mass_range[0], stellar_mass < mass_range[1]])
-        else:
-            plot_mask = np.ones(len(stellar_mass), dtype=bool)
-
-        if redshift_range:
+        elif redshift_range:
             plot_mask = generate_combined_mask([redshift >= redshift_range[0], redshift < redshift_range[1]])
         else:
             plot_mask = np.ones(len(redshift), dtype=bool)
@@ -635,9 +775,12 @@ class FSFCat:
         plt.show()
         plt.clf()
 
-    def plot_bpt_diag(self, write_to_file=False):
+    def plot_bpt_diag(self, write_to_file=False, loii_range=None, snr_lim = 3):
         """
         Plots line ratios in bpt-style diagram with AGN/HII separator lines from Kewley et al. (2001) and Kauffmann et al. (2003)
+
+        Cuts:
+        -SNR > 3 for all 4 lines
 
         :return: None
         """
@@ -645,22 +788,28 @@ class FSFCat:
         print("making bpt diagram...")
 
         nii = self.fsfData['NII_6584_FLUX'][self.bgs_mask]
+        nii_snr = nii/(np.sqrt(1/self.fsfData['NII_6584_FLUX_IVAR'][self.bgs_mask]))
         ha = self.fsfData['HALPHA_FLUX'][self.bgs_mask]
+        ha_snr = ha/(np.sqrt(1/self.fsfData['HALPHA_FLUX_IVAR'][self.bgs_mask]))
         oiii = self.fsfData['OIII_5007_FLUX'][self.bgs_mask]
+        oiii_snr = oiii/(np.sqrt(1/self.fsfData['OIII_5007_FLUX_IVAR'][self.bgs_mask]))
         hb = self.fsfData['HBETA_FLUX'][self.bgs_mask]
+        hb_snr = hb/(np.sqrt(1/self.fsfData['HBETA_FLUX_IVAR'][self.bgs_mask]))
+
+        # todo: add snr calculation
 
         # removing all cases where the selected line flux is zero, since log(0) and x/0 are undefined
         zero_mask = generate_combined_mask([nii != 0.0, ha != 0.0, oiii != 0.0, hb != 0.0])
 
-        #print(sum(nii[zero_mask] == 0.0), sum(ha[zero_mask] == 0.0), sum(oiii[zero_mask] == 0.0), sum(hb[zero_mask] == 0.0))
+        full_mask = generate_combined_mask([zero_mask, nii_snr > snr_lim, ha_snr > snr_lim, oiii_snr > snr_lim, hb_snr > snr_lim, self.fsfData['OII_SUMMED_SNR'][self.bgs_mask] > snr_lim])
+
 
         # Getting the highest and lowest OII luminosity for the high SNR (>3) sources to use as the limits for the color bar. Otherwise its all basically just one color
         oii_lum = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][self.bgs_mask]
         #hisnr_oii_lum = oii_lum[self.fsfData['OII_SUMMED_SNR'][self.bgs_mask] > 3]
-        #max_oii_lum = max(hisnr_oii_lum)
-        #min_oii_lum = min(hisnr_oii_lum)
 
-        oii_lum = oii_lum[zero_mask]
+        if loii_range:
+            full_mask = generate_combined_mask([full_mask, oii_lum >= loii_range[0], oii_lum < loii_range[1]])
 
 
         x_for_line_1 = np.log10(np.logspace(-5,.049,300))
@@ -676,28 +825,282 @@ class FSFCat:
             tids = self.fsfData['TARGETID'][self.bgs_mask]
             #this goes through all the tids and writes them to a file if they are in the "agn" region
             with open('possible_agn_tids.txt', 'w') as f:
-                for i in range(len(tids[zero_mask])):
-                    x = np.log10(nii[zero_mask][i]/ha[zero_mask][i])
-                    y = np.log10(oiii[zero_mask][i]/hb[zero_mask][i])
+                for i in range(len(tids[full_mask])):
+                    x = np.log10(nii[full_mask][i]/ha[full_mask][i])
+                    y = np.log10(oiii[full_mask][i]/hb[full_mask][i])
                     if y > 0.61/(x - 0.47) + 1.19 and y > 2.144507*x + 0.465028:
-                        f.write(f"{tids[zero_mask][i]}\n")
+                        f.write(f"{tids[full_mask][i]}\n")
 
-        # the third line does not appear in the paper cited... not sure where it comes from
 
-        plt.scatter(np.log10(nii[zero_mask]/ha[zero_mask]), np.log10(oiii[zero_mask]/hb[zero_mask]), marker='.', alpha=0.3, c=oii_lum, vmax=41.5, vmin=39)
+
+        f, ax = plt.subplots()
+        plt.scatter(np.log10(nii[full_mask]/ha[full_mask]), np.log10(oiii[full_mask]/hb[full_mask]), marker='.', alpha=0.3, c=oii_lum[full_mask], vmax=41.5, vmin=39)
         plt.plot(x_for_line_1, hii_agn_line, linestyle='dashed', color='k')
         plt.plot(x_for_line_2, composite_line_2, linestyle='dotted', color='r')
         plt.plot(x_for_line_3, agn_line_3, linestyle='dashdot', color='b')
-        plt.text(-1.3, -1.1, "H II", fontweight='bold')
-        plt.text(-.15, -1.7, "Composite", fontweight='bold')
+        plt.text(-1.2, -0.9, "H II", fontweight='bold')
+        plt.text(-.21, -1.1, "Composite", fontweight='bold')
         plt.text(-1.0, 1.5, "AGN", fontweight='bold')
-        plt.text(0.5, -1.4, "Shocks", fontweight='bold')
+        plt.text(0.45, -0.8, "Shocks", fontweight='bold')
+        plt.text(0.005, 1.005, f'total: {sum(full_mask)}, snr $>$ {snr_lim}',
+              horizontalalignment='left',
+              verticalalignment='bottom',
+              transform=ax.transAxes)
         plt.xlim(-2, 1)
-        plt.ylim(-2, 2)
+        plt.ylim(-1.5, 2)
         plt.colorbar(label=r"$\log{L_{[OII]}}$")
         plt.xlabel(r'$\log([N II]_{\lambda 6584} / H\alpha)$')
         plt.ylabel(r'$\log([O III]_{\lambda 5007} / H\beta)$')
-        plt.savefig('figures/bpt_bgs_sv3.png',dpi=800)
+        if loii_range:
+            plt.savefig(f'figures/bpt_bgs_sv3_loii=({loii_range[0], loii_range[1]}).png',dpi=800)
+        else:
+            plt.savefig('figures/bpt_bgs_sv3.png',dpi=800)
+        plt.show()
+
+
+
+    def plot_bpt_diag_luminosity_bin(self, snr_lim = 3):
+        """
+        Plots line ratios in bpt-style diagram with AGN/HII separator lines from Kewley et al. (2001) and Kauffmann et al. (2003)
+
+        Cuts:
+        -SNR > 3 for all 4 lines and oii lum
+
+        :return: None
+        """
+
+        print("making bpt diagram...")
+
+        nii = self.fsfData['NII_6584_FLUX'][self.bgs_mask]
+        nii_snr = nii/(np.sqrt(1/self.fsfData['NII_6584_FLUX_IVAR'][self.bgs_mask]))
+        ha = self.fsfData['HALPHA_FLUX'][self.bgs_mask]
+        ha_snr = ha/(np.sqrt(1/self.fsfData['HALPHA_FLUX_IVAR'][self.bgs_mask]))
+        oiii = self.fsfData['OIII_5007_FLUX'][self.bgs_mask]
+        oiii_snr = oiii/(np.sqrt(1/self.fsfData['OIII_5007_FLUX_IVAR'][self.bgs_mask]))
+        hb = self.fsfData['HBETA_FLUX'][self.bgs_mask]
+        hb_snr = hb/(np.sqrt(1/self.fsfData['HBETA_FLUX_IVAR'][self.bgs_mask]))
+
+        # todo: add snr calculation
+
+        # removing all cases where the selected line flux is zero, since log(0) and x/0 are undefined
+        zero_mask = generate_combined_mask([nii != 0.0, ha != 0.0, oiii != 0.0, hb != 0.0])
+
+        # Including only galaxies where all lines have SNR > 3 (by default)
+        full_mask = generate_combined_mask([zero_mask, nii_snr > snr_lim, ha_snr > snr_lim, oiii_snr > snr_lim, hb_snr > snr_lim, self.fsfData['OII_SUMMED_SNR'][self.bgs_mask] > snr_lim])
+
+        oii_lum = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][self.bgs_mask]
+
+        x_for_line_1 = np.log10(np.logspace(-5,.049,300))
+        hii_agn_line = 0.61/(x_for_line_1 - 0.05) + 1.3
+
+        x_for_line_2 = np.log10(np.logspace(-5, 0.46, 300))
+        composite_line_2 = 0.61/(x_for_line_2 - 0.47) + 1.19
+
+        x_for_line_3 = np.linspace(-.13,2,100)
+        agn_line_3 = 2.144507*x_for_line_3 + 0.465028
+
+        #fig = plt.figure(figsize=(16, 8))
+        fig, axo = plt.subplots(2, 3, sharex=True, sharey=True, figsize=(14, 8))
+        ax1 = plt.subplot(2, 3, 1)
+        ax2 = plt.subplot(2, 3, 2)
+        ax3 = plt.subplot(2, 3, 3)
+        ax4 = plt.subplot(2, 3, 4)
+        ax5 = plt.subplot(2, 3, 5)
+        ax6 = plt.subplot(2, 3, 6)
+        axs = [ax1, ax2, ax3, ax4, ax5, ax6]
+        fig.add_subplot(111, frameon=False)
+        plt.tick_params(labelcolor='none', which='both', top=False, bottom=False, left=False, right=False)
+        plt.xlabel(r'$\log([N II]_{\lambda 6584} / H\alpha)$')
+        plt.ylabel(r'$\log([O III]_{\lambda 5007} / H\beta)$')
+
+        for ax, loii in zip(axs, np.arange(39, 42, 0.5)):
+            axis_mask = generate_combined_mask([full_mask, oii_lum >= loii, oii_lum < loii + 0.5])
+            sp = ax.scatter(np.log10(nii[axis_mask]/ha[axis_mask]), np.log10(oiii[axis_mask]/hb[axis_mask]), marker='.', alpha=0.3, c=oii_lum[axis_mask], vmax=42, vmin=39)
+            ax.plot(x_for_line_1, hii_agn_line, linestyle='dashed', color='k')
+            ax.plot(x_for_line_2, composite_line_2, linestyle='dotted', color='r')
+            ax.plot(x_for_line_3, agn_line_3, linestyle='dashdot', color='b')
+            ax.set_xlim(-2, 1)
+            ax.set_ylim(-1.5, 2)
+            #ax.text(-1.2, -0.9, "H II", fontweight='bold')
+            #ax.text(-.21, -1.1, "Composite", fontweight='bold')
+            #ax.text(-1.0, 1.5, "AGN", fontweight='bold')
+            #ax.text(0.45, -0.8, "Shocks", fontweight='bold')
+            ax.text(0.01, 0.98, f'total: {sum(axis_mask)}, snr $>$ {snr_lim}, ${loii} \leq$ ' +  r'$\log{L_{[OII]}}$' + f' $< {loii + 0.5}$',
+                  horizontalalignment='left',
+                  verticalalignment='top',
+                  transform=ax.transAxes)
+            #ax.set_xlabel(r'$\log([N II]_{\lambda 6584} / H\alpha)$')
+            #ax.set_ylabel(r'$\log([O III]_{\lambda 5007} / H\beta)$')
+
+        #ax = fig.add_subplot(111, frameon=False)
+        #ax.spines['top'].set_color('none')
+        #ax.spines['bottom'].set_color('none')
+        #ax.spines['left'].set_color('none')
+        #ax.spines['right'].set_color('none')
+        #ax.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
+        #ax.set_xlabel(r'$\log([N II]_{\lambda 6584} / H\alpha)$')
+        #ax.set_ylabel(r'$\log([O III]_{\lambda 5007} / H\beta)$')
+        #plt.colorbar(sp, ax=axo, label=r"$\log{L_{[OII]}}$")
+        plt.subplots_adjust(wspace=0, hspace=0)
+        plt.savefig(f'figures/bpt_bgs_sv3_loii.png',dpi=800)
+        plt.show()
+
+
+
+    def plot_bpt_hist(self, loii_range=None, snr_lim = 3):
+        """
+        Plots line ratios in bpt-style diagram with AGN/HII separator lines from Kewley et al. (2001) and Kauffmann et al. (2003)
+
+        Cuts:
+        -SNR > 3 for all 4 lines
+
+        :return: None
+        """
+
+        print("making bpt histogram...")
+
+        nii = self.fsfData['NII_6584_FLUX'][self.bgs_mask]
+        nii_snr = nii/(np.sqrt(1/self.fsfData['NII_6584_FLUX_IVAR'][self.bgs_mask]))
+        ha = self.fsfData['HALPHA_FLUX'][self.bgs_mask]
+        ha_snr = ha/(np.sqrt(1/self.fsfData['HALPHA_FLUX_IVAR'][self.bgs_mask]))
+        oiii = self.fsfData['OIII_5007_FLUX'][self.bgs_mask]
+        oiii_snr = oiii/(np.sqrt(1/self.fsfData['OIII_5007_FLUX_IVAR'][self.bgs_mask]))
+        hb = self.fsfData['HBETA_FLUX'][self.bgs_mask]
+        hb_snr = hb/(np.sqrt(1/self.fsfData['HBETA_FLUX_IVAR'][self.bgs_mask]))
+
+        # removing all cases where the selected line flux is zero, since log(0) and x/0 are undefined
+        zero_mask = generate_combined_mask([nii != 0.0, ha != 0.0, oiii != 0.0, hb != 0.0])
+
+        full_mask = generate_combined_mask([zero_mask, nii_snr > snr_lim, ha_snr > snr_lim, oiii_snr > snr_lim, hb_snr > snr_lim, self.fsfData['OII_SUMMED_SNR'][self.bgs_mask] > snr_lim])
+
+
+        # Getting the highest and lowest OII luminosity for the high SNR (>3) sources to use as the limits for the color bar. Otherwise its all basically just one color
+        oii_lum = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][self.bgs_mask]
+        #hisnr_oii_lum = oii_lum[self.fsfData['OII_SUMMED_SNR'][self.bgs_mask] > 3]
+
+        if loii_range:
+            full_mask = generate_combined_mask([full_mask, oii_lum >= loii_range[0], oii_lum < loii_range[1]])
+
+
+        x_for_line_1 = np.log10(np.logspace(-5,.049,300))
+        hii_agn_line = 0.61/(x_for_line_1 - 0.05) + 1.3
+
+        x_for_line_2 = np.log10(np.logspace(-5, 0.46, 300))
+        composite_line_2 = 0.61/(x_for_line_2 - 0.47) + 1.19
+
+        x_for_line_3 = np.linspace(-.13,2,100)
+        agn_line_3 = 2.144507*x_for_line_3 + 0.465028
+
+        f, ax = plt.subplots()
+        plt.hist2d(np.log10(nii[full_mask]/ha[full_mask]), np.log10(oiii[full_mask]/hb[full_mask]), bins=100, range=((-2, 1), (-1.5, 2)), vmax=300)
+        plt.plot(x_for_line_1, hii_agn_line, linestyle='dashed', color='k')
+        plt.plot(x_for_line_2, composite_line_2, linestyle='dotted', color='r')
+        plt.plot(x_for_line_3, agn_line_3, linestyle='dashdot', color='b')
+        plt.text(-1.2, -0.9, "H II", fontweight='bold')
+        plt.text(-.21, -1.1, "Composite", fontweight='bold')
+        plt.text(-1.0, 1.5, "AGN", fontweight='bold')
+        plt.text(0.45, -0.8, "Shocks", fontweight='bold')
+        plt.text(0.005, 1.005, f'total: {sum(full_mask)}, snr $>$ {snr_lim}',
+              horizontalalignment='left',
+              verticalalignment='bottom',
+              transform=ax.transAxes)
+
+        plt.xlim(-2, 1)
+        plt.ylim(-1.5, 2)
+        plt.colorbar(label=r"count")
+        plt.xlabel(r'$\log([N II]_{\lambda 6584} / H\alpha)$')
+        plt.ylabel(r'$\log([O III]_{\lambda 5007} / H\beta)$')
+        if loii_range:
+            plt.savefig(f'figures/bpt_hist_bgs_sv3_loii=({loii_range[0], loii_range[1]}).png',dpi=800)
+        else:
+            plt.savefig('figures/bpt_hist_bgs_sv3.png',dpi=800)
+        plt.show()
+
+
+
+    def plot_bpt_hist_with_loii(self, snr_lim = 3):
+        """
+        Plots line ratios in bpt-style diagram with AGN/HII separator lines from Kewley et al. (2001) and Kauffmann et al. (2003)
+
+        Cuts:
+        -SNR > 3 for all 4 lines
+
+        :return: None
+        """
+
+        print("making bpt histogram...")
+
+        # Pulling all lines and calculating their snr
+        nii = self.fsfData['NII_6584_FLUX'][self.bgs_mask]
+        nii_snr = nii/(np.sqrt(1/self.fsfData['NII_6584_FLUX_IVAR'][self.bgs_mask]))
+        ha = self.fsfData['HALPHA_FLUX'][self.bgs_mask]
+        ha_snr = ha/(np.sqrt(1/self.fsfData['HALPHA_FLUX_IVAR'][self.bgs_mask]))
+        oiii = self.fsfData['OIII_5007_FLUX'][self.bgs_mask]
+        oiii_snr = oiii/(np.sqrt(1/self.fsfData['OIII_5007_FLUX_IVAR'][self.bgs_mask]))
+        hb = self.fsfData['HBETA_FLUX'][self.bgs_mask]
+        hb_snr = hb/(np.sqrt(1/self.fsfData['HBETA_FLUX_IVAR'][self.bgs_mask]))
+
+        # removing all cases where the selected line flux is zero, since log(0) and x/0 are undefined
+        zero_mask = generate_combined_mask([nii != 0.0, ha != 0.0, oiii != 0.0, hb != 0.0])
+
+        # implementing snr limits
+        full_mask = generate_combined_mask([zero_mask, nii_snr > snr_lim, ha_snr > snr_lim, oiii_snr > snr_lim, hb_snr > snr_lim, self.fsfData['OII_SUMMED_SNR'][self.bgs_mask] > snr_lim])
+
+        oii_lum = self.fsfData['OII_COMBINED_LUMINOSITY_LOG'][self.bgs_mask]
+
+        # creating lines to use on the plot
+        x_for_line_1 = np.log10(np.logspace(-5,.049,300))
+        hii_agn_line = 0.61/(x_for_line_1 - 0.05) + 1.3
+
+        x_for_line_2 = np.log10(np.logspace(-5, 0.46, 300))
+        composite_line_2 = 0.61/(x_for_line_2 - 0.47) + 1.19
+
+        x_for_line_3 = np.linspace(-.13,2,100)
+        agn_line_3 = 2.144507*x_for_line_3 + 0.465028
+
+
+        # Creating pandas df
+        ratios = pd.DataFrame(list(zip(np.log10(nii[full_mask]/ha[full_mask]), np.log10(oiii[full_mask]/hb[full_mask]), oii_lum)), columns=['x', 'y', 'lum'])
+
+
+        # Plotting
+        f, ax = plt.subplots()
+
+        #coordinates['']
+
+        ratios['x_bin'] = pd.cut(ratios['x'], bins=100)
+        ratios['y_bin'] = pd.cut(ratios['y'], bins=100)
+
+        grouped = ratios.groupby(['x_bin', 'y_bin'], as_index=False)['lum'].median()
+        data = grouped.pivot(index='y_bin', columns='x_bin', values='lum')
+        fig, ax = plt.subplots(figsize=(12,10))
+        sns.heatmap(data, ax=ax, xticklabels=10, yticklabels=10)
+
+
+        #plt.hist2d(np.log10(nii[full_mask]/ha[full_mask]), np.log10(oiii[full_mask]/hb[full_mask]), bins=100, range=((-2, 1), (-1.5, 2)), vmax=300)
+        plt.plot(x_for_line_1, hii_agn_line, linestyle='dashed', color='k')
+        plt.plot(x_for_line_2, composite_line_2, linestyle='dotted', color='r')
+        plt.plot(x_for_line_3, agn_line_3, linestyle='dashdot', color='b')
+        #plt.text(-1.2, -0.9, "H II", fontweight='bold')
+        #plt.text(-.21, -1.1, "Composite", fontweight='bold')
+        #plt.text(-1.0, 1.5, "AGN", fontweight='bold')
+        #plt.text(0.45, -0.8, "Shocks", fontweight='bold')
+        ax.text(0.005, 1.005, f'total: {sum(full_mask)}, snr $>$ {snr_lim}',
+              horizontalalignment='left',
+              verticalalignment='bottom',
+              transform=ax.transAxes)
+
+        #ax.set_xticks(np.arange(-1.5, 1.5, 0.3))
+        #ax.set_yticks(np.arange(-2.2, 0.8, 0.3))
+
+        #plt.xlim(-2, 1)
+        #plt.ylim(-1.5, 2)
+        #plt.colorbar(label=r"$\log{L_{[OII]}}$")
+        plt.xlabel(r'$\log([N II]_{\lambda 6584} / H\alpha)$')
+        plt.ylabel(r'$\log([O III]_{\lambda 5007} / H\beta)$')
+        ax.invert_yaxis()
+
+        plt.savefig('figures/bpt_hist_lum_color_bgs_sv3.png',dpi=800)
         plt.show()
 
     def generate_all_figs(self):
@@ -737,15 +1140,26 @@ if __name__ == '__main__':
     catalog = FSFCat()
     #catalog.calculate_oii_rat_snr(1)  # the argument is the naive snr calculation to use
     #catalog.generate_all_figs()
-    for i in np.arange(0,.5, .1):
-        catalog.plot_oii_lum_vs_color(zrange=[i,i+.1])
+    #for i in np.arange(0,.5, .1):
+    #    catalog.plot_oii_lum_vs_color(zrange=[i,i+.1])
     #catalog.plot_oii_rat_vs_redshift()
-    catalog.plot_oii_rat_vs_stellar_mass(snr_lim=1, plt_col='loii')
-    catalog.plot_oii_rat_vs_stellar_mass(snr_lim=1, plt_col='redshift')
-    for i in np.arange(7,12):
-        catalog.plot_oii_rat_vs_stellar_mass(mass_range=[i, i+1] ,snr_lim=1, plt_col='redshift')
+    #catalog.plot_oii_rat_vs_stellar_mass()
+    #for i in np.arange(7,12):
+    #    catalog.plot_oii_rat_vs_stellar_mass(mass_range=[i, i+1])
+    #for i in np.arange(39, 42, .5):
+    #    catalog.plot_oii_rat_vs_stellar_mass_loii_bin([i, i + .5])
+
+    catalog.plot_bpt_hist_with_loii()
+
     #catalog.report_all_zero_rat()
     #catalog.plot_bpt_diag(write_to_file=False)
     #oii_lum = catalog.fsfData['OII_COMBINED_LUMINOSITY_LOG'][catalog.bgs_mask]
     #tid = catalog.fsfData['TARGETID'][catalog.bgs_mask]
     #print(tid[oii_lum < 32.5])
+
+    #catalog.plot_bpt_diag()
+    #catalog.plot_bpt_diag_luminosity_bin()
+    #for i in np.arange(39, 42, 0.5):
+    #    catalog.plot_bpt_diag(loii_range=[i, i+0.5])
+
+    #catalog.plot_bpt_hist()
