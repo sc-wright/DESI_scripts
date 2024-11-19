@@ -237,9 +237,9 @@ class FSFCat:
 
 
 class Spectrum:
-    def __init__(self, targetid='random'):
+    def __init__(self, targetid='random', zpix_cat=None):
 
-        print("reading in table...")
+        #print("reading in table...")
         self.basedir = os.path.expanduser('~') + '/Documents/school/research'
         self.my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
         self.survey = 'sv3'
@@ -248,7 +248,10 @@ class Spectrum:
         self.specprod_dir = f'{self.my_dir}/public/edr/spectro/redux/{self.specprod}'
         self.fastspec_dir = f'{self.my_dir}/public/edr/vac/edr/fastspecfit/{self.specprod}/v3.2'
         self.healpix_dir = self.specprod_dir + '/healpix'
-        self.zpix_cat = Table.read(f'{self.specprod_dir}/zcatalog/zall-pix-{self.specprod}.fits', hdu="ZCATALOG")
+        if zpix_cat is None:
+            self.zpix_cat = Table.read(f'{self.specprod_dir}/zcatalog/zall-pix-{self.specprod}.fits', hdu="ZCATALOG")
+        else:
+            self.zpix_cat = zpix_cat
         #self.fsf_models = Table.read(f'{self.fastspec_dir}/fastspec-fuji.fits', hdu=3)
 
         if targetid == 'random':
@@ -266,7 +269,7 @@ class Spectrum:
         #self.files_checked = False
         #self.check_for_files()
 
-    def plot_spectrum(self, foldstruct="spectra/"):
+    def plot_spectrum(self, foldstruct="spectra/", display_plot=False):
         """
         return 6 means there were multiple matching targetids found in the selected fastspecfit file
 
@@ -616,10 +619,15 @@ class Spectrum:
             ax7.axvline(6718.2913, linestyle='dashed', lw = 0.8, alpha=0.4)
             ax7.axvline(6732.6705, linestyle='dashed', lw = 0.8, alpha=0.4)
             ax7.set_xlabel(r'$\lambda_{rest}$')
-
-
+            """
+            try:
+                plt.savefig(f'{foldstruct}spectrum_{self.targetid}.png', dpi=800)
+            except FileNotFoundError:
+                os.mkdir(fold)
+            """
             plt.savefig(f'{foldstruct}spectrum_{self.targetid}.png', dpi=800)
-            plt.show()
+            if display_plot:
+                plt.show()
 
     def fetch_models(self):
         # This is a test function that is not actually used.
@@ -803,9 +811,26 @@ def spec_plot():
     #spec.gen_qa_fig()
     #spec.fetch_models()
 
+def cigale_failed_target_plot():
+    from unfit_tids import tids
+
+    my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
+    specprod = 'fuji'
+    specprod_dir = f'{my_dir}/public/edr/spectro/redux/{specprod}'
+
+    zpix = Table.read(f'{specprod_dir}/zcatalog/zall-pix-{specprod}.fits', hdu="ZCATALOG")
+
+
+    for tid in tids[:100]:
+        spec = Spectrum(targetid=tid, zpix_cat=zpix)
+        spec.check_for_files()
+        spec.plot_spectrum(foldstruct="spectra/cigale_failed/")
+
+
 def main():
     #make_plots()
-    spec_plot()
+    #spec_plot()
+    cigale_failed_target_plot()
 
 
 

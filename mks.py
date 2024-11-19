@@ -13,4 +13,4 @@ pc = 3.086E16       # pc
 Mpc = 3.086E22      # megaparsec
 mSun = 1.9891E30    # mass of the sun
 erg = 1E-7          # joule/erg
-lSun = 3.826E26     # joules/s
+lSun = 3.826E26     # joule/s

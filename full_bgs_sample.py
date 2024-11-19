@@ -1,5 +1,6 @@
 import os
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 plt.rcParams['text.usetex'] = True
@@ -8,6 +9,7 @@ plt.rcParams['text.usetex'] = True
 import seaborn as sns
 
 import numpy as np
+from scipy import stats
 
 from astropy.convolution import convolve, Gaussian1DKernel
 from astropy.table import Table
@@ -381,6 +383,46 @@ class ZPIXCatalog:
         primary_obs_dict = {tids[i]: programs[i] for i in range(len(tids))}
         return primary_obs_dict
 
+
+class CombinedCatalog:
+    def __init__(self):
+        tids = FSF.catalog['TARGETID']
+        redshifts = FSF.catalog['Z']
+        oii_rat = FSF.catalog['OII_DOUBLET_RATIO']
+        sii_rat = FSF.catalog['SII_DOUBLET_RATIO']
+        primary = FSF.catalog['ISPRIMARY']
+
+        cigale_results = read_cigale_results()
+
+        cigale_mstar = {cigale_results['id'][i]: cigale_results['bayes.stellar.m_star'][i] for i in range(len(cigale_results['id']))}
+        cigale_sfr = {cigale_results['id'][i]: cigale_results['bayes.sfh.sfr'][i] for i in range(len(cigale_results['id']))}
+
+        mstar = []
+        sfr = []
+
+        for i, tid in enumerate(tids):
+            try:
+                m = cigale_mstar[tid]
+                s = cigale_sfr[tid]
+                mstar.append(m)
+                sfr.append(s)
+            except KeyError:
+                mstar.append(0)
+                sfr.append(0)
+        if len(mstar) != len(sfr):
+            print("something went wrong when combining the lists")
+            return 0
+
+        data = {'TARGETID': list(tids),
+                'Z': list(redshifts),
+                'OII_DOUBLET_RATIO': list(oii_rat),
+                'SII_DOUBLET_RATIO': list(sii_rat),
+                'MSTAR': list(mstar),
+                'SFR': list(sfr),
+                'ISPRIMARY': list(primary)}
+        self.catalog = pd.DataFrame(data)
+
+
 def generate_oii_snr_mask():
     """
     This makes a new mask of BGS size that includes the sample of sources with SNR > 2 for the OII amplitude.
@@ -394,7 +436,6 @@ def generate_oii_snr_mask():
     return oii_snr_mask
 
 
-
 def generate_bgs_mask():
     lss = LSSCatalog()
     fsf = FSFCatalog()
@@ -404,23 +445,12 @@ def generate_bgs_mask():
     # this all the non-vetoed targetids in the bgs. fully unique confirmed
     bgs_tids = lss.catalog['TARGETID'][lss.catalog['ZWARN'] == 0]
 
-
     # This is fully unique as well - we have selected primary observations in SV3 only
     fsf_bgs_mask = np.isin(fsf.catalog['TARGETID'], bgs_tids)
     fsf_bgs_mask = generate_combined_mask(fsf_bgs_mask, fsf.catalog['Z'] <= .4, fsf.catalog['ISPRIMARY'], fsf.catalog['SURVEY'] == 'sv3')
 
-    # confirming that the fsf tid list is not fully unique
-    #print(len(fsf.catalog['TARGETID'][fsf_bgs_mask]), len(np.unique(fsf.catalog['TARGETID'][fsf_bgs_mask])))
-    #u, c = np.unique(fsf.catalog['TARGETID'][fsf_bgs_mask], return_counts=True)
-    #print(len(u[c > 1]))
-    #print(u[c > 1])
-
     dr9_bgs_mask = np.isin(dr9.catalog['TARGETID'], fsf.catalog['TARGETID'][fsf_bgs_mask])
-
-    #print(sum(fsf_bgs_mask), sum(dr9_bgs_mask))
-    #u, c = np.unique(dr9.catalog['TARGETID'][dr9_bgs_mask], return_counts=True)
-    #print(len(u[c > 1]))
-    #print(u[c > 1])
+    dr9_bgs_mask = generate_combined_mask(dr9_bgs_mask, dr9.catalog['MASKBITS'] == 0)
 
     return lss, fsf, dr9, fsf_bgs_mask, dr9_bgs_mask
 
@@ -442,14 +472,10 @@ def plot_loii_vs_redshift():
 
     high_snr_mask = generate_oii_snr_mask()
 
-    #low_snr_mask = [a_i and not b_i for a_i, b_i in zip(FSF_BGS_MASK, high_snr_mask)]
-
-
     loii = FSF.catalog['OII_COMBINED_LUMINOSITY'][FSF_BGS_MASK]
     hi_snr_loii = FSF.catalog['OII_COMBINED_LUMINOSITY'][high_snr_mask]
     z = FSF.catalog['Z'][FSF_BGS_MASK]
     hi_snr_z = FSF.catalog['Z'][high_snr_mask]
-
 
     fig = plt.figure(figsize=(5, 4))
     gs = GridSpec(4, 3)
@@ -471,7 +497,7 @@ def plot_loii_vs_redshift():
     plt.show()
 
 
-def plot_oii_rat_vs_stellar_mass(mass_range=False):
+def plot_ne_vs_stellar_mass(mass_range=False):
     """
     Plots the OII doublet ratio vs the stellar mass with a histogram of the ratios
     Note: Stellar mass may be overestimated in v3.2 of the fastspecfit catalog
@@ -480,32 +506,46 @@ def plot_oii_rat_vs_stellar_mass(mass_range=False):
     :return:
     """
 
-    full_mask = generate_oii_snr_mask()
+    cigale_results = read_cigale_results()
+    cigale_mstar = {cigale_results['id'][i]: cigale_results['bayes.stellar.m_star'][i] for i in range(len(cigale_results['id']))}
 
-    oii_rat = FSF.catalog['OII_DOUBLET_RATIO'][full_mask]
-    stellar_mass = FSF.catalog['LOGMSTAR'][full_mask]
-    colr = FSF.catalog['OII_COMBINED_LUMINOSITY'][full_mask]
+    doublet_snr_mask = generate_combined_mask(generate_oii_snr_mask(), FSF.catalog['OII_DOUBLET_RATIO'] > 0.3839, FSF.catalog['OII_DOUBLET_RATIO'] < 1.4558)
 
-    if mass_range:
-        plot_mask = generate_combined_mask([stellar_mass >= mass_range[0], stellar_mass < mass_range[1]])
-    else:
-        plot_mask = np.ones(len(stellar_mass), dtype=bool)
+    tids = FSF.catalog['TARGETID'][doublet_snr_mask]
+    n_oii = np.log10(calc_electron_density_oii(doublet_snr_mask))
+    colr = FSF.catalog['OII_COMBINED_LUMINOSITY'][doublet_snr_mask]
 
-    fig = plt.figure(figsize=(5, 6))
+    mstar_list = []
+    ne_list = []
+    colr_list = []
+
+    for i, tid in enumerate(tids):
+        try:
+            m = cigale_mstar[tid]
+            mstar_list.append(m)
+            ne_list.append(n_oii[i])
+            colr_list.append(colr[i])
+        except KeyError:
+            pass
+    if len(mstar_list) != len(ne_list):
+        print("something went wrong when combining the lists")
+        return 0
+
+    fig = plt.figure(figsize=(8, 10))
     gs = GridSpec(2, 4)
     ax_main = plt.subplot(gs[0:2, :3])
     ax_yDist = plt.subplot(gs[0:2, 3], sharey=ax_main)
     plt.subplots_adjust(wspace=.0, top=0.99)
     axs = [ax_main, ax_yDist]
-    sp = ax_main.scatter(stellar_mass[plot_mask], oii_rat[plot_mask], c=colr[plot_mask], marker='.', alpha=0.3, vmax=41.5, vmin=39)
+    sp = ax_main.scatter(np.log10(mstar_list), ne_list, c=colr_list, marker='+', alpha=0.12, vmax=41.5, vmin=39)
     fig.colorbar(sp, ax=axs, label=r"$L_{[OII]}$", location='top')
-    ax_main.text(0.005, 1.005, f'total: {sum(plot_mask)}, snr $>$ {SNR_LIM}',
+    ax_main.text(0.005, 1.005, f'total: {len(ne_list)}, snr $>$ {SNR_LIM}',
              horizontalalignment='left',
              verticalalignment='bottom',
              transform=ax_main.transAxes)
-    ax_main.set(xlabel=r"$\log{M_{\star}}$", ylabel="$\lambda 3726 / \lambda 3729$", ylim=(0, 2))
+    ax_main.set(xlabel=r"$\log{M_{\star}/M_\odot}$", ylabel="$\log{n_e}$", ylim=(.4, 5.2), xlim=(6, 11.7))
 
-    ax_yDist.hist(oii_rat[plot_mask], bins=100, orientation='horizontal', align='mid')
+    ax_yDist.hist(ne_list, bins=100, orientation='horizontal', align='mid')
     ax_yDist.set(xlabel='count')
 
     ax_yDist.invert_xaxis()
@@ -514,7 +554,7 @@ def plot_oii_rat_vs_stellar_mass(mass_range=False):
     if mass_range:
         plt.savefig('figures/oii_ratio_vs_mass_loiicol_m=({:.1f}'.format(mass_range[0]) + ',{:.1f}'.format(mass_range[1]) + ').png')
     else:
-        plt.savefig("figures/oii_ratio_vs_mass_loiicol.png", dpi=800)
+        plt.savefig("figures/ne_vs_mass.png", dpi=800)
     plt.show()
 
 
@@ -618,54 +658,15 @@ def luminosity_functions():
     plt.savefig("figures/oii luminosity functions bgs.png", dpi=600)
 
 
-def snr_cut_test_plot():
-    oii_snr_mask = generate_oii_snr_mask()
-
-    bgs_oii_tids = FSF.catalog['TARGETID'][oii_snr_mask]
-
-    for i in bgs_oii_tids:
-        spec = Spectrum(targetid=i)
-        spec.check_for_files()
-        spec.plot_spectrum(foldstruct="spectra/snr2test/")
-
-
-def calc_SFR_Halpha_old_WRONG():
-
-    # THIS IS GARBAGE AND WRONG. DO NOT USE.
-
-    # this version cuts on h beta only. Not sure which to use
-    hbeta_snr_mask = FSF.catalog['HBETA_AMP'] * np.sqrt(FSF.catalog['HBETA_AMP_IVAR']) > SNR_LIM
-    combined_mask = generate_combined_mask(FSF_BGS_MASK, hbeta_snr_mask)
-
-    unextincted_halpha_flux = FSF.catalog['HBETA_FLUX'][combined_mask] * 2.86
-    redshifts = FSF.catalog['Z'][combined_mask]
-
-    unextincted_halpha_lum = np.ones(len(unextincted_halpha_flux)) * -1
-    ctime = CustomTimer(len(unextincted_halpha_flux), "Halpha luminosity")
-    for i, (flux, z) in enumerate(zip(unextincted_halpha_flux, redshifts)):
-        unextincted_halpha_lum[i] = get_lum(flux, z)
-        ctime.update_time(i)
-
-    # using the table from Kennicutt 2012
-    halpha_sfr_log = np.log10(unextincted_halpha_lum) - 41.27
-    # using the method from Kennicutt 1998 (as listed in https://arxiv.org/pdf/2312.00300 sect 3.3)
-    halpha_sfr = unextincted_halpha_lum * 7.9E-42
-
-
-    plt.hist(halpha_sfr_log, bins=60)
-    plt.xlabel(r"$\log(\dot{M}_\star)$ from H alpha ($M_\odot$/yr)")
-    plt.show()
-    #this definitely seems wrong...
-
-
-def k_lambda(wavelength):
+def k_lambda_2001(wavelength):
+    # From
     # Wavelength is in angstroms - convert to microns
-    wavelength = wavelength * 1e-4
+    wl = wavelength * 1e-4
 
-    if wavelength <= 2.2000 and wavelength > .6300:
-        k = 1.17 * (-1.1857 + (1.040 / wavelength)) + 1.78
-    elif wavelength >= .1200:
-        k = 1.17 * (-2.156 + (1.509 / wavelength) - (0.198 / wavelength**2) + (0.011 / wavelength**3)) + 1.78
+    if wl <= 2.2000 and wl > .6300:
+        k = 1.17 * (-1.1857 + (1.040 / wl)) + 1.78
+    elif wl >= .1200:
+        k = 1.17 * (-2.156 + (1.509 / wl) - (0.198 / wl**2) + (0.011 / wl**3)) + 1.78
     else:
         print(wavelength, "outside wavelength range")
         return 0
@@ -673,18 +674,48 @@ def k_lambda(wavelength):
     return k
 
 
+def k_lambda_2000(wavelength):
+    # From
+    # Wavelength is in angstroms - convert to microns
+    wl = wavelength * 1e-4
+
+    if wl <= 2.2000 and wl > .6300:
+        k = 2.659 * (-1.1857 + (1.040 / wl)) + 4.05
+    elif wl >= .1200:
+        k = 3.659 * (-2.156 + (1.509 / wl) - (0.198 / wl**2) + (0.011 / wl**3)) + 4.05
+    else:
+        print(wavelength, "outside wavelength range")
+        return 0
+
+    return k
+
+
+def plot_k():
+    wl_range = np.linspace(1200, 22000, 300)
+    k_2000 = np.zeros(300)
+    k_2001 = np.zeros(300)
+    for i, wl in enumerate(wl_range):
+        k_2000[i] = k_lambda_2000(wl)
+        k_2001[i] = k_lambda_2001(wl)
+
+    plt.plot(wl_range, k_2000, label=r'$k_{2000}$')
+    plt.plot(wl_range, k_2001, label=r'$k_{2001}$')
+    plt.xlabel(r'$\lambda$ (\AA)')
+    plt.ylabel(r'$k(\lambda)$')
+    plt.legend()
+    plt.show()
+
+
 def calc_SFR_Halpha():
     halpha_snr_mask = FSF.catalog['HALPHA_AMP'] * np.sqrt(FSF.catalog['HALPHA_AMP_IVAR']) > SNR_LIM
     hbeta_snr_mask = FSF.catalog['HBETA_AMP'] * np.sqrt(FSF.catalog['HBETA_AMP_IVAR']) > SNR_LIM
     full_mask = generate_combined_mask(FSF_BGS_MASK, halpha_snr_mask, hbeta_snr_mask)
 
-    E_beta_alpha = -2.5 * np.log10(2.86 / (FSF.catalog['HALPHA_FLUX'][full_mask] / FSF.catalog['HBETA_FLUX'][full_mask]))
+    E_beta_alpha = 2.5 * np.log10(2.86 / (FSF.catalog['HALPHA_FLUX'][full_mask] / FSF.catalog['HBETA_FLUX'][full_mask]))
 
-    print(E_beta_alpha)
+    EBV = E_beta_alpha / (k_lambda_2000(6563) - k_lambda_2000(4861))
 
-    EBV = E_beta_alpha / (k_lambda(4861) - k_lambda(6563))
-
-    H_alpha_flux_int = FSF.catalog['HALPHA_FLUX'][full_mask] * 10 ** (0.4 * k_lambda(6563) * EBV)
+    H_alpha_flux_int = FSF.catalog['HALPHA_FLUX'][full_mask] * 10 ** (0.4 * k_lambda_2000(6563) * EBV)
 
     redshifts = FSF.catalog['Z'][full_mask]
     tids = FSF.catalog['TARGETID'][full_mask]
@@ -705,6 +736,47 @@ def calc_SFR_Halpha():
     return halpha_sfr_table
 
 
+
+def calc_sfr_corrected_halpha():
+
+    halpha_snr_mask = FSF.catalog['HALPHA_AMP'] * np.sqrt(FSF.catalog['HALPHA_AMP_IVAR']) > SNR_LIM
+    hbeta_snr_mask = FSF.catalog['HBETA_AMP'] * np.sqrt(FSF.catalog['HBETA_AMP_IVAR']) > SNR_LIM
+    full_mask = generate_combined_mask(FSF_BGS_MASK, halpha_snr_mask, hbeta_snr_mask)
+
+    ha_dict = aperture_correct_ha()
+
+    redshifts = FSF.catalog['Z'][full_mask]
+    tids = FSF.catalog['TARGETID'][full_mask]
+
+    success_tid = []
+    halpha_lum = []
+
+    for i, (tid, z) in enumerate(zip(tids, redshifts)):
+        try:
+            flux = ha_dict[tid]
+            halpha_lum.append(get_lum(flux, z))
+            success_tid.append(tid)
+        except KeyError:
+            print(f"Ha failure for {tid}")
+
+    success_tid = np.array(success_tid)
+    halpha_lum = np.array(halpha_lum)
+
+    # using the table from Kennicutt 2012
+    halpha_sfr_log = np.log10(halpha_lum) - 41.27
+    # using the method from Kennicutt 1998 (as listed in https://arxiv.org/pdf/2312.00300 sect 3.3)
+    halpha_sfr = halpha_lum * 7.9E-42
+
+    #halpha_sfr_dict = dict(zip(success_tid, halpha_sfr))
+    #return halpha_sfr_dict
+
+    halpha_sfr_table = pd.DataFrame(list(zip(success_tid, halpha_sfr_log)), columns=['TARGETID', 'LOG_SFR'])
+    #halpha_sfr_table = halpha_sfr_table.drop_duplicates()
+
+    return halpha_sfr_table
+
+
+
 def calc_mstar_WISE(f, z):
     # using methods from Jarrett et al. 2023 (https://arxiv.org/abs/2301.05952)
 
@@ -719,7 +791,6 @@ def calc_mstar_WISE(f, z):
     abs_mag = mag.value - 5 * np.log10(D_l) - 25
 
     lw1 = 10 ** (-0.4 * (abs_mag - 3.24))
-
 
     A0 = -12.62185
     A1 = 5.00155
@@ -739,14 +810,16 @@ def calc_mstar_WISE_color(w1, w2, z):
     :return:
     """
 
-    # these fluxes are in nmgy, in AB system
+    # these fluxes are in nmgy
     w1_flux = w1
     w2_flux = w2
 
     # Set flat cosmology
     cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc, Tcmb0=2.725 * u.K, Om0=0.3)
     # Calculate luminosity distance in Mpc
-    D_l = cosmo.luminosity_distance(z).value  # Mpc
+    D_l_unit = cosmo.luminosity_distance(z)
+    D_l = D_l_unit.value  # Mpc
+    #print(D_l_unit, D_l)
     # Calculate magnitudes from the fluxes
     # fluxes are in nanomaggies
 
@@ -757,20 +830,18 @@ def calc_mstar_WISE_color(w1, w2, z):
     w1_mag_vega = -2.5 * np.log10(w1_flux) + 22.5 - 2.699
     w2_mag_vega = -2.5 * np.log10(w2_flux) + 22.5 - 3.339
 
-
     # color is difference between  magnitudes
     col = w1_mag_vega - w2_mag_vega
 
-    #print(w1_mag, w2_mag)
     # Calculate absolute magnitudes using luminosity distance
-    abs_mag_w1_AB = w1_mag_AB - 5 * np.log10(D_l * 1e6 / 10) # convert D_l to pc
+    # convert D_l to pc
+    abs_mag_w1_AB = w1_mag_AB - 5 * np.log10(D_l * 1e6 / 10)# - 2.5*np.log10(1.2) # last term is just for debugging
     abs_mag_w1_vega = abs_mag_w1_AB - 2.699
-
 
     # calculate luminosity using absolute magnitude
     # vega mag of sun is 3.24
     # AB mag of sun is 5.92
-    log_lw1 = -0.4 * (abs_mag_w1_vega - 3.24)
+    log_lw1 = -0.4 * (abs_mag_w1_vega  - 3.24)
 
     A0 = -0.376
     A1 = -1.053
@@ -787,23 +858,28 @@ def all_WISE_mstars():
     fw1 = DR9.catalog['FLUX_W1'][DR9_BGS_MASK] / DR9.catalog['MW_TRANSMISSION_W1'][DR9_BGS_MASK]
     fw2 = DR9.catalog['FLUX_W2'][DR9_BGS_MASK] / DR9.catalog['MW_TRANSMISSION_W2'][DR9_BGS_MASK]
     redshifts = DR9.catalog['Z'][DR9_BGS_MASK]
-    mstar = np.zeros(len(tids))
+    mstar_dict = {}
 
     for i, (tid, flux1, flux2, z) in enumerate(zip(tids, fw1, fw2, redshifts)):
+        # There are some sources without good redshift fits, with z=-1. The BGS_MASK should remove these,
+        # but this is a catch in case one gets through. It should never trigger.
         if z < 0:
             print("redshift error")
             return 1
-        mstar[i] = calc_mstar_WISE_color(flux1, flux2, z)
-    wise_mstar = pd.DataFrame(list(zip(tids, mstar)), columns=['TARGETID', 'MSTAR'])
-    wise_mstar = wise_mstar.drop_duplicates()
-    return wise_mstar
+        # The DR9 catalog contains duplicate entries for many of the target ids. I'm not sure why.
+        # The fluxes are all identical, so it should be ok to skip entries if they are duplicated.
+        if tid in mstar_dict.keys():
+            pass
+        else:
+            mstar_dict[tid] = calc_mstar_WISE_color(flux1, flux2, z)
+    return mstar_dict
 
 
 def nmgy_to_mjy(flux):
     return flux * (10 ** (-(48.6 + 22.5)/2.5)) * (10 ** 23) * 10 ** 3
 
 
-def generate_cigale_input_table():
+def generate_cigale_input_table_separate():
 
     cigale_dir = os.path.expanduser('~') + '/Documents/school/research/cigale'
 
@@ -862,27 +938,30 @@ def generate_cigale_input_table():
         file.write(f'# id\tredshift\tDECam_g\tDECam_g_err\tDECam_r\tDECam_r_err\tDECam_z\tDECam_z_err\tWISE1\tWISE1_err\tWISE2\tWISE2_err\tWISE3\tWISE3_err\tWISE4\tWISE4_err\n')
 
         for i, tid in enumerate(fsf_tids):
-            write_str = ""
-            if emm_dict[tid][0] in (9010, 9012):
-                write_str += f'{tid}\t{fsf_redshifts[i]}'
+            try:
+                write_str = ""
+                if emm_dict[tid][0] in (9010, 9012):
+                    write_str += f'{tid}\t{fsf_redshifts[i]}'
 
-                for colr in [1, 3, 5]:
-                    val = nmgy_to_mjy(emm_dict[tid][colr])
-                    err = nmgy_to_mjy(emm_dict[tid][colr+1])
-                    if err / val < 0.10:
-                        err = val * 0.10
-                    write_str += f'\t{val}\t{err}'
+                    for colr in [1, 3, 5]:
+                        val = nmgy_to_mjy(emm_dict[tid][colr])
+                        err = nmgy_to_mjy(emm_dict[tid][colr+1])
+                        if err / val < 0.10:
+                            err = val * 0.10
+                        write_str += f'\t{val}\t{err}'
 
-                for colr in [7, 9, 11, 13]:
-                    val = nmgy_to_mjy(emm_dict[tid][colr])
-                    err = nmgy_to_mjy(emm_dict[tid][colr+1])
-                    if err / val < 0.13:
-                        err = val * 0.13
-                    write_str += f'\t{val}\t{err}'
+                    for colr in [7, 9, 11, 13]:
+                        val = nmgy_to_mjy(emm_dict[tid][colr])
+                        err = nmgy_to_mjy(emm_dict[tid][colr+1])
+                        if err / val < 0.13:
+                            err = val * 0.13
+                        write_str += f'\t{val}\t{err}'
 
-                write_str += '\n'
+                    write_str += '\n'
 
-                file.write(write_str)
+                    file.write(write_str)
+            except KeyError:
+                pass
 
     # bok section - release 9011
     print("generating list for release 9011...")
@@ -905,27 +984,146 @@ def generate_cigale_input_table():
         file.write(f'# id\tredshift\tbok_g\tbok_g_err\tbok_r\tbok_r_err\tWISE1\tWISE1_err\tWISE2\tWISE2_err\tWISE3\tWISE3_err\tWISE4\tWISE4_err\n')
 
         for i, tid in enumerate(fsf_tids):
-            write_str = ""
-            if emm_dict[tid][0] in (9010, 9012):
-                write_str += f'{tid}\t{fsf_redshifts[i]}'
+            try:
+                write_str = ""
+                if emm_dict[tid][0] in [9011]:
+                    write_str += f'{tid}\t{fsf_redshifts[i]}'
 
-                for colr in [1, 3]:
-                    val = nmgy_to_mjy(emm_dict[tid][colr])
-                    err = nmgy_to_mjy(emm_dict[tid][colr + 1])
-                    if err / val < 0.10:
-                        err = val * 0.10
-                    write_str += f'\t{val}\t{err}'
+                    for colr in [1, 3]:
+                        val = nmgy_to_mjy(emm_dict[tid][colr])
+                        err = nmgy_to_mjy(emm_dict[tid][colr + 1])
+                        if err / val < 0.10:
+                            err = val * 0.10
+                        write_str += f'\t{val}\t{err}'
 
-                for colr in [7, 9, 11, 13]:
-                    val = nmgy_to_mjy(emm_dict[tid][colr])
-                    err = nmgy_to_mjy(emm_dict[tid][colr + 1])
-                    if err / val < 0.13:
-                        err = val * 0.13
-                    write_str += f'\t{val}\t{err}'
+                    for colr in [7, 9, 11, 13]:
+                        val = nmgy_to_mjy(emm_dict[tid][colr])
+                        err = nmgy_to_mjy(emm_dict[tid][colr + 1])
+                        if err / val < 0.13:
+                            err = val * 0.13
+                        write_str += f'\t{val}\t{err}'
 
-                write_str += '\n'
+                    write_str += '\n'
 
-                file.write(write_str)
+                    file.write(write_str)
+            except KeyError:
+                pass
+
+
+def generate_cigale_input_table(custom_tids = None):
+
+    cigale_dir = os.path.expanduser('~') + '/Documents/school/research/cigale'
+
+    fsf_tids = FSF.catalog['TARGETID'][FSF_BGS_MASK]
+    fsf_redshifts = FSF.catalog['Z'][FSF_BGS_MASK]
+
+    if custom_tids is None:
+        pass
+    else:
+        custom_select = np.isin(fsf_tids, custom_tids)
+        fsf_tids = fsf_tids[custom_select]
+        fsf_redshifts = fsf_redshifts[custom_select]
+
+    print(fsf_tids[:5])
+
+    dr9_tids = DR9.catalog['TARGETID'][DR9_BGS_MASK]
+    dr9_release = DR9.catalog['RELEASE'][DR9_BGS_MASK]
+
+    if custom_tids is None:
+        folder = '_full_sky'
+        file_name = 'cigale_input_data_full.dat'
+    else:
+        folder = 'custom_target_list'
+        file_name = 'cigale_input_data_custom.dat'
+
+
+    filters = ['FLUX_G', 'FLUX_IVAR_G', 'FLUX_R', 'FLUX_IVAR_R', 'FLUX_Z', 'FLUX_IVAR_Z', 'FLUX_W1', 'FLUX_IVAR_W1', 'FLUX_W2', 'FLUX_IVAR_W2', 'FLUX_W3', 'FLUX_IVAR_W3', 'FLUX_W4', 'FLUX_IVAR_W4']
+
+    g_ls = DR9.catalog['FLUX_G'][DR9_BGS_MASK] / DR9.catalog['MW_TRANSMISSION_G'][DR9_BGS_MASK]
+    r_ls = DR9.catalog['FLUX_R'][DR9_BGS_MASK] / DR9.catalog['MW_TRANSMISSION_R'][DR9_BGS_MASK]
+    z_ls = DR9.catalog['FLUX_Z'][DR9_BGS_MASK] / DR9.catalog['MW_TRANSMISSION_Z'][DR9_BGS_MASK]
+    w1_ls = DR9.catalog['FLUX_W1'][DR9_BGS_MASK] / DR9.catalog['MW_TRANSMISSION_W1'][DR9_BGS_MASK]
+    w2_ls = DR9.catalog['FLUX_W2'][DR9_BGS_MASK] / DR9.catalog['MW_TRANSMISSION_W2'][DR9_BGS_MASK]
+    w3_ls = DR9.catalog['FLUX_W3'][DR9_BGS_MASK] / DR9.catalog['MW_TRANSMISSION_W3'][DR9_BGS_MASK]
+    w4_ls = DR9.catalog['FLUX_W4'][DR9_BGS_MASK] / DR9.catalog['MW_TRANSMISSION_W4'][DR9_BGS_MASK]
+
+    g_err_ls = 1/np.sqrt(DR9.catalog['FLUX_IVAR_G'][DR9_BGS_MASK])
+    r_err_ls = 1/np.sqrt(DR9.catalog['FLUX_IVAR_R'][DR9_BGS_MASK])
+    z_err_ls = 1/np.sqrt(DR9.catalog['FLUX_IVAR_Z'][DR9_BGS_MASK])
+    w1_err_ls = 1/np.sqrt(DR9.catalog['FLUX_IVAR_W1'][DR9_BGS_MASK])
+    w2_err_ls = 1/np.sqrt(DR9.catalog['FLUX_IVAR_W2'][DR9_BGS_MASK])
+    w3_err_ls = 1/np.sqrt(DR9.catalog['FLUX_IVAR_W3'][DR9_BGS_MASK])
+    w4_err_ls = 1/np.sqrt(DR9.catalog['FLUX_IVAR_W4'][DR9_BGS_MASK])
+
+    emm_dict = {}
+
+    for tid, release, g, r, z, w1, w2, w3, w4, g_err, r_err, z_err, w1_err, w2_err, w3_err, w4_err in zip(dr9_tids, dr9_release, g_ls, r_ls, z_ls, w1_ls, w2_ls, w3_ls, w4_ls, g_err_ls, r_err_ls, z_err_ls, w1_err_ls, w2_err_ls, w3_err_ls, w4_err_ls):
+        # Duplicates are identical so this is fine
+        lis = [release, g, g_err, r, r_err, z, z_err, w1, w1_err, w2, w2_err, w3, w3_err, w4, w4_err]
+        emm_dict.update({tid: lis})
+
+
+    with open(f'{cigale_dir}/{folder}/{file_name}', 'w') as file:
+        file.write(
+            f'# id\tredshift\tDECam_g\tDECam_g_err\tDECam_r\tDECam_r_err\tDECam_z\tDECam_z_err\tbok_g\tbok_g_err\tbok_r\tbok_r_err\tWISE1\tWISE1_err\tWISE2\tWISE2_err\tWISE3\tWISE3_err\tWISE4\tWISE4_err\n')
+
+        for i, tid in enumerate(fsf_tids):
+
+            try:
+                write_str = ""
+
+                # DECam section - release 9010
+
+                if emm_dict[tid][0] in (9010, 9012):
+                    write_str += f'{tid}\t{fsf_redshifts[i]}'
+
+                    for colr in [1, 3, 5]:
+
+                        val = nmgy_to_mjy(emm_dict[tid][colr])
+                        err = nmgy_to_mjy(emm_dict[tid][colr+1])
+                        if err / abs(val) < 0.10:
+                            err = abs(val) * 0.10
+                        write_str += f'\t{val}\t{err}'
+
+                    write_str += f'\tnan\tnan\tnan\tnan'
+
+                    for colr in [7, 9, 11, 13]:
+                        val = nmgy_to_mjy(emm_dict[tid][colr])
+                        err = nmgy_to_mjy(emm_dict[tid][colr+1])
+                        if err / abs(val) < 0.13:
+                            err = abs(val) * 0.13
+                        write_str += f'\t{val}\t{err}'
+
+                    write_str += '\n'
+
+                    file.write(write_str)
+
+                # bok section - release 9011
+
+                elif emm_dict[tid][0] in [9011]:
+                    write_str += f'{tid}\t{fsf_redshifts[i]}'
+
+                    write_str += f'\tnan\tnan\tnan\tnan\tnan\tnan'
+
+                    for colr in [1, 3]:
+                        val = nmgy_to_mjy(emm_dict[tid][colr])
+                        err = nmgy_to_mjy(emm_dict[tid][colr + 1])
+                        if err / abs(val) < 0.10:
+                            err = abs(val) * 0.10
+                        write_str += f'\t{val}\t{err}'
+
+                    for colr in [7, 9, 11, 13]:
+                        val = nmgy_to_mjy(emm_dict[tid][colr])
+                        err = nmgy_to_mjy(emm_dict[tid][colr + 1])
+                        if err / abs(val) < 0.13:
+                            err = abs(val) * 0.13
+                        write_str += f'\t{val}\t{err}'
+
+                    write_str += '\n'
+
+                    file.write(write_str)
+            except KeyError:
+                pass
 
 
 def calc_electron_density_oii(mask):
@@ -954,15 +1152,43 @@ def calc_electron_density_sii(mask):
     return n
 
 
-def read_cigale_results():
+def read_cigale_results(folder='_full_sky'):
     cigale_dir = os.path.expanduser('~') + '/Documents/school/research/cigale'
 
-    results_1 = pd.read_table(f"{cigale_dir}/9010/out/results.txt", header=0, sep='\s+')
-    results_2 = pd.read_table(f"{cigale_dir}/9011/out/results.txt", header=0, sep='\s+')
+    #results_1 = pd.read_table(f"{cigale_dir}/9010/out/results.txt", header=0, sep='\s+')
+    #results_2 = pd.read_table(f"{cigale_dir}/9011/out/results.txt", header=0, sep='\s+')
 
-    cigale_results = pd.concat([results_1, results_2], ignore_index=True, sort=False)
+    #cigale_results = pd.concat([results_1, results_2], ignore_index=True, sort=False)
+
+    cigale_results = pd.read_table(f"{cigale_dir}/{folder}/out/results.txt", header=0, sep='\s+')
 
     return cigale_results
+
+
+def analyze_chi2_cigale():
+    results = read_cigale_results(folder='_full_sky')
+
+    plt.hist(results['best.reduced_chi_square'], bins=100, range=(0, 30))
+    plt.xlabel(r"$\chi^2_\nu$")
+    plt.title("All")
+    plt.show()
+    """
+    cigale_dir = os.path.expanduser('~') + '/Documents/school/research/cigale'
+    result_10 = pd.read_table(f"{cigale_dir}/9010/out/results.txt", header=0, sep='\s+')
+    result_11 = pd.read_table(f"{cigale_dir}/9011/out/results.txt", header=0, sep='\s+')
+    plt.hist(result_10['best.reduced_chi_square'], bins=100, range=(0, 30))
+    plt.xlabel(r"$\chi^2_\nu$")
+    plt.title("Southern Hemisphere (9010)")
+    plt.show()
+    plt.hist(result_11['best.reduced_chi_square'], bins=100, range=(0, 30))
+    plt.xlabel(r"$\chi^2_\nu$")
+    plt.title("Northern Hemisphere (9011)")
+    plt.show()
+    """
+
+
+def probe_cigale_results():
+    cigale_results = read_cigale_results()
 
 
 def compare_sfr():
@@ -971,34 +1197,48 @@ def compare_sfr():
     os.path.expanduser('~') + '/Documents/school/research/cigale'
 
     cigale_sfr_results = {cigale_results['id'][i]: cigale_results['bayes.sfh.sfr'][i] for i in range(len(cigale_results['id']))}
-    halpha_sfr_table = calc_SFR_Halpha()
+    halpha_sfr_table = calc_sfr_corrected_halpha()
+    aperture_dict = calc_aperture()
     cigale_sfr = []
     halpha_sfr = []
+    aperture = []
 
     for i, tid in enumerate(halpha_sfr_table['TARGETID']):
         try:
             cm = np.log10(cigale_sfr_results[tid])
             wm = halpha_sfr_table['LOG_SFR'][i]
-            cigale_sfr.append(cm)
-            halpha_sfr.append(wm)
+            ap = aperture_dict[tid]
+            if np.isfinite(cm) and np.isfinite(wm):  # don't include any nans or /0's
+                cigale_sfr.append(cm)
+                halpha_sfr.append(wm)
+                aperture.append(ap)
             if len(cigale_sfr) != len(halpha_sfr):
                 print(i) #something's gone wrong, this is the item that caused the problem
                 break
         except KeyError:
             pass
 
-    fig = plt.figure(figsize=(8, 10))
+    cigale_sfr = np.array(cigale_sfr)
+    halpha_sfr = np.array(halpha_sfr)
+
+    print(cigale_sfr)
+    print(f"SFR Avg: {np.average(cigale_sfr)}, stdev: {np.std(cigale_sfr)}")
+    print(halpha_sfr)
+    print(f"SFR Avg: {np.average(halpha_sfr)}, stdev: {np.std(halpha_sfr)}")
+
+    fig = plt.figure(figsize=(12, 10))
     gs = GridSpec(4, 4)
     ax_main = plt.subplot(gs[1:4, :3])
     ax_yDist = plt.subplot(gs[1:4, 3], sharey=ax_main)
     ax_xDist = plt.subplot(gs[0, :3], sharex=ax_main)
     plt.subplots_adjust(wspace=.0, hspace=.0)#, top=0.95)
     axs = [ax_main, ax_yDist]#, ax_xDist]
-    sp = ax_main.scatter(halpha_sfr, cigale_sfr, marker='+', alpha=0.05)
-    ax_main.plot(np.linspace(-10,10, 100), np.linspace(-10, 10, 100), color='r')
-    ax_main.set(xlabel=r"SFR from H$\alpha$ [log(M$_\odot$/yr]", ylabel=r"SFR from CIGALE [log(M$_\odot$/yr]", xlim=(-6,3), ylim=(-6,3))
+    sp = ax_main.scatter(halpha_sfr, halpha_sfr - cigale_sfr, marker='+', alpha=0.05)
+    ax_main.plot(np.linspace(-10,10, 100), np.zeros(100), color='r')
+    ax_main.set(xlabel=r"SFR$_{H\alpha}$ [log(M$_\odot$/yr)]", ylabel=r"SFR$_{H\alpha}$ - SFR$_{CIGALE}$ [log(M$_\odot$/yr)]")#, xlim=(-9,4), ylim=(-10,4))
+    #ax_main.set(xlabel=r"$F_{r,model}/F_{r,aperture}$", ylabel=r"SFR$_{H\alpha}$ - SFR$_{CIGALE}$ [log(M$_\odot$/yr)]", xlim=(0,20), ylim=(-10,5))
 
-    ax_yDist.hist(cigale_sfr, bins=200, orientation='horizontal', align='mid')
+    ax_yDist.hist(halpha_sfr - cigale_sfr, bins=200, orientation='horizontal', align='mid')
     ax_xDist.hist(halpha_sfr, bins=200, orientation='vertical', align='mid')
 
     ax_yDist.invert_xaxis()
@@ -1009,20 +1249,19 @@ def compare_sfr():
 
 
 
+
 def compare_stellar_mass():
     cigale_results = read_cigale_results()
 
-    #os.path.expanduser('~') + '/Documents/school/research/cigale'
-
     cigale_mstar_results = {cigale_results['id'][i]: cigale_results['bayes.stellar.m_star'][i] for i in range(len(cigale_results['id']))}
-    wise_mstar_table = all_WISE_mstars()
+    wise_mstar_dictionary = all_WISE_mstars()
     cigale_mstar = []
     wise_mstar = []
 
-    for i, tid in enumerate(wise_mstar_table['TARGETID']):
+    for i, tid in enumerate(wise_mstar_dictionary.keys()):
         try:
             cm = np.log10(cigale_mstar_results[tid])
-            wm = wise_mstar_table['MSTAR'][i]
+            wm = wise_mstar_dictionary[tid]
             cigale_mstar.append(cm)
             wise_mstar.append(wm)
             if len(cigale_mstar) != len(wise_mstar):
@@ -1031,19 +1270,31 @@ def compare_stellar_mass():
         except KeyError:
             pass
 
-    fig = plt.figure(figsize=(8, 10))
+    cigale_mstar = np.array(cigale_mstar)
+    wise_mstar = np.array(wise_mstar)
+
+    nan_mask = generate_combined_mask(np.invert(np.isnan(cigale_mstar)), np.invert(np.isnan(wise_mstar)))
+
+    cigale_mstar = cigale_mstar[nan_mask]
+    wise_mstar = wise_mstar[nan_mask]
+
+    difference = wise_mstar - cigale_mstar
+
+    fig = plt.figure(figsize=(8, 6))
     gs = GridSpec(4, 4)
     ax_main = plt.subplot(gs[1:4, :3])
     ax_yDist = plt.subplot(gs[1:4, 3], sharey=ax_main)
     ax_xDist = plt.subplot(gs[0, :3], sharex=ax_main)
     plt.subplots_adjust(wspace=.0, hspace=.0)#, top=0.95)
     axs = [ax_main, ax_yDist]#, ax_xDist]
-    sp = ax_main.scatter(wise_mstar, cigale_mstar, marker='+', alpha=0.05)
-    ax_main.plot(np.linspace(7,13, 300), np.linspace(7, 13, 300), color='r')
-    ax_main.set(xlabel=r"$m_\star$ from WISE color", ylabel=r"$m_\star$ from CIGALE", xlim=(7,13), ylim=(7,13))
+    sp = ax_main.scatter(cigale_mstar, difference, marker='+', alpha=0.05)
+    ax_main.plot(np.linspace(7,13, 300), np.zeros(300), color='r')
+    ax_main.set(xlabel=r"$\log{m_\star/m_\odot}$ from CIGALE", ylabel=r"$\log{m_{\star, WISE}/m_\odot} - \log{m_{\star, CIGALE}/m_\odot}$", xlim=(8,12), ylim=(-2, 3))
 
-    ax_yDist.hist(cigale_mstar, bins=200, orientation='horizontal', align='mid')
-    ax_xDist.hist(wise_mstar, bins=200, orientation='vertical', align='mid')
+    ax_yDist.hist(difference, bins=500, orientation='horizontal', align='mid')
+    ax_xDist.hist(cigale_mstar, bins=200, orientation='vertical', align='mid')
+    ax_yDist.text(.03, .985, r"Mean: {:.2f}".format(np.average(difference)) + "\n" + r"Median: {:.2f}".format(np.median(difference)) + "\n" + r"$\sigma$: {:.2f}".format(np.std(difference)), verticalalignment='top',
+                  transform=ax_yDist.transAxes)
 
     ax_yDist.invert_xaxis()
     ax_yDist.yaxis.tick_right()
@@ -1052,25 +1303,15 @@ def compare_stellar_mass():
     plt.show()
 
 
-    #mstar_scatter = np.histogram2d(wise_mstar['MSTAR'], cigale_mstar)#, bins=100)
-    #plt.imshow(mstar_scatter)
-    #plt.xlabel(r"$\log(m_\star)$ from WISE1")
-    #plt.ylabel(r"$\log(m_\star)$ from CIGALE")
-    #plt.title("Stellar mass determination comparison")
-    #plt.show()
-
-
 def compare_stellar_mass_vs_catalog():
     cigale_results = read_cigale_results()
 
     my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
 
-
     cigale_mstar_results = {cigale_results['id'][i]: cigale_results['bayes.stellar.m_star'][i] for i in range(len(cigale_results['id']))}
     catalog_results = Table.read(f'{my_dir}/public/edr/vac/edr/stellar-mass-emline/v1.0/edr_galaxy_stellarmass_lineinfo_v1.0.fits')
     cigale_mstar = []
     catalog_mstar = []
-
 
     for i, tid in enumerate(catalog_results['TARGETID']):
         try:
@@ -1136,11 +1377,9 @@ def plot_bpt_diag(write_to_file=False, loii_range=None):
 
     # Getting the highest and lowest OII luminosity for the high SNR (>3) sources to use as the limits for the color bar. Otherwise its all basically just one color
     oii_lum = FSF.catalog['OII_COMBINED_LUMINOSITY'][FSF_BGS_MASK]
-    #hisnr_oii_lum = oii_lum[FSF.catalog['OII_SUMMED_SNR'][FSF_BGS_MASK] > 3]
 
     if loii_range:
         full_mask = generate_combined_mask(full_mask, oii_lum >= loii_range[0], oii_lum < loii_range[1])
-
 
     x_for_line_1 = np.log10(np.logspace(-5,.049,300))
     hii_agn_line = 0.61/(x_for_line_1 - 0.05) + 1.3
@@ -1266,7 +1505,15 @@ def compare_electron_density():
     n_oii = np.log10(calc_electron_density_oii(doublet_snr_mask))
     n_sii = np.log10(calc_electron_density_sii(doublet_snr_mask))
 
-    fig = plt.figure(figsize=(6, 6))
+    median_n_oii = np.median(n_oii)
+    mean_n_oii = np.average(n_oii)
+    stdev_n_oii = np.std(n_oii)
+
+    median_n_sii = np.median(n_sii)
+    mean_n_sii = np.average(n_sii)
+    stdev_n_sii = np.std(n_sii)
+
+    fig = plt.figure(figsize=(4, 4))
     gs = GridSpec(4, 4)
     ax_main = plt.subplot(gs[1:4, :3])
     ax_yDist = plt.subplot(gs[1:4, 3], sharey=ax_main)
@@ -1274,16 +1521,21 @@ def compare_electron_density():
     plt.subplots_adjust(wspace=.0, hspace=.0)#, top=0.95)
     axs = [ax_main, ax_yDist]#, ax_xDist]
     sp = ax_main.scatter(n_oii, n_sii, marker='+', alpha=0.1)
-    ax_main.set(xlabel=r"$\log{n_e}$ from [OII] (cm$^{-1}$)", ylabel=r"$\log{n_e}$ from [SII] (cm$^{-1}$)", ylim=(1.8, 4.6), xlim=(1.8, 4.6))
+    ax_main.set(xlabel=r"$\log{n_e}$ from [OII] (cm$^{-3}$)", ylabel=r"$\log{n_e}$ from [SII] (cm$^{-3}$)", ylim=(1.8, 4.6), xlim=(1.8, 4.6))
+    ax_main.text(.01, .01, fr"SNR $\geq$ {SNR_LIM}", verticalalignment='bottom', transform=ax_main.transAxes)
 
     ax_xDist.hist(n_oii, bins=200, orientation='vertical', align='mid')
+    ax_xDist.text(.015, .97, f"N: {len(n_oii)}" + "\n" + r"Median: {:.2f}".format(median_n_oii) + "\n" + r"$\sigma$: {:.2f}".format(stdev_n_oii), verticalalignment='top',
+                  transform=ax_xDist.transAxes)
     ax_yDist.hist(n_sii, bins=200, orientation='horizontal', align='mid')
+    ax_yDist.text(.03, .985, f"N: {len(n_sii)}" + "\n" + r"Median: {:.2f}".format(median_n_sii) + "\n" + r"$\sigma$: {:.2f}".format(stdev_n_sii), verticalalignment='top',
+                  transform=ax_yDist.transAxes)
 
     ax_yDist.invert_xaxis()
     ax_yDist.yaxis.tick_right()
 
     ax_xDist.tick_params(top=True, labeltop=True, bottom=False, labelbottom=False)
-    plt.savefig('figures/electron_density_comparison.png', dpi=600)
+    plt.savefig(f'figures/electron_density_comparison_{SNR_LIM}.png', dpi=600)
     plt.show()
 
 
@@ -1308,6 +1560,339 @@ def hist_electron_density():
     plt.show()
 
 
+def ne_vs_mass():
+
+    cigale_results = read_cigale_results()
+    cigale_mstar = {cigale_results['id'][i]: cigale_results['bayes.stellar.m_star'][i] for i in range(len(cigale_results['id']))}
+
+    doublet_snr_mask = generate_combined_mask(generate_oii_snr_mask(), FSF.catalog['OII_DOUBLET_RATIO'] > 0.3839, FSF.catalog['OII_DOUBLET_RATIO'] < 1.4558)
+
+    tids = FSF.catalog['TARGETID'][doublet_snr_mask]
+    n_oii = np.log10(calc_electron_density_oii(doublet_snr_mask))
+
+    mstar_list = []
+    ne_list = []
+
+    for i, tid in enumerate(tids):
+        try:
+            m = cigale_mstar[tid]
+            mstar_list.append(m)
+            ne_list.append(n_oii[i])
+        except KeyError:
+            pass
+    if len(mstar_list) != len(ne_list):
+        print("something went wrong when combining the lists")
+        return 0
+
+    plt.scatter(np.log10(mstar_list), ne_list, marker='+', alpha=0.2)
+    plt.xlim(6, 11.9)
+    plt.ylim(0.2, 5.4)
+    plt.xlabel(r"$\log{M_{\star}/M_\odot}$")
+    plt.ylabel(r"$\log{n_e}$ from [OII] ratio")
+    plt.show()
+
+
+def sfr_vs_mstar():
+
+    mass = np.log10(CC.catalog['MSTAR'][FSF_BGS_MASK])
+    sfr = np.log10(CC.catalog['SFR'][FSF_BGS_MASK])
+
+    print(len(mass), len(sfr))
+    print(len(np.isfinite(mass)), len(np.isfinite(sfr)))
+
+    fin = generate_combined_mask(np.isfinite(mass), np.isfinite(sfr))
+    mass = mass[fin]
+    sfr = sfr[fin]
+
+    print(len(mass), len(sfr))
+
+    plt.hist2d(mass, sfr, bins=100, norm=mpl.colors.LogNorm())
+    plt.xlabel(r"$\log{M_\star/M_\odot}$")
+    plt.ylabel(r"$\log{M_\odot/ \textrm{yr}}$")
+    plt.show()
+
+"""
+def calc_gr_color(full_mask=FSF_BGS_MASK):
+
+    # these fluxes are in nmgy
+    g_mag = FSF.catalog['ABSMAG10_DECAM_G'][full_mask]
+    r_mag = FSF.catalog['ABSMAG10_DECAM_R'][full_mask]
+
+    # Set flat cosmology
+    cosmo = FlatLambdaCDM(H0=70 * u.km / u.s / u.Mpc, Tcmb0=2.725 * u.K, Om0=0.3)
+    # Calculate luminosity distance in Mpc
+    D_l_unit = cosmo.luminosity_distance(z)
+    D_l = D_l_unit.value  # Mpc
+    # print(D_l_unit, D_l)
+    # Calculate magnitudes from the fluxes
+    # fluxes are in nanomaggies
+
+    # conversion to magnitudes from https://www.legacysurvey.org/dr9/description/#photometry
+    # then convert to vega mag
+    # from https://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2flux
+    w1_mag_AB = -2.5 * np.log10(w1_flux) + 22.5
+    w1_mag_vega = -2.5 * np.log10(w1_flux) + 22.5 - 2.699
+    w2_mag_vega = -2.5 * np.log10(w2_flux) + 22.5 - 3.339
+
+    # color is difference between  magnitudes
+    col = w1_mag_vega - w2_mag_vega
+"""
+
+def calc_aperture():
+
+    tids = DR9.catalog['TARGETID']
+    r_flux = DR9.catalog['FLUX_R']
+    r_flux_aper = DR9.catalog['FIBERFLUX_R']
+
+    aper_ratio = np.divide(r_flux, r_flux_aper)  # Element-wise division
+    aper_dict = dict(zip(tids, aper_ratio))
+
+    return aper_dict
+
+
+def plot_aper_z():
+
+    tids = FSF.catalog['TARGETID'][FSF_BGS_MASK]
+    redshifts = FSF.catalog['Z'][FSF_BGS_MASK]
+    ap_dict = calc_aperture()
+    aper_ratios = [ap_dict[key] for key in tids]
+
+    plt.scatter(redshifts, np.log10(aper_ratios), marker='+', alpha=0.03)
+    plt.xlabel("Z")
+    plt.ylabel(r"$\log{F_{r, proj}/F_{r, aper}}$")
+    plt.savefig('fall_figs/aperture_vs_z.png')
+    plt.show()
+
+
+def aperture_correct_ha():
+
+    # Calculate extinction-corrected H-alpha using H-beta
+
+    halpha_snr_mask = FSF.catalog['HALPHA_AMP'] * np.sqrt(FSF.catalog['HALPHA_AMP_IVAR']) > SNR_LIM
+    hbeta_snr_mask = FSF.catalog['HBETA_AMP'] * np.sqrt(FSF.catalog['HBETA_AMP_IVAR']) > SNR_LIM
+    full_mask = generate_combined_mask(FSF_BGS_MASK, halpha_snr_mask, hbeta_snr_mask)
+
+    E_beta_alpha = 2.5 * np.log10(
+        2.86 / (FSF.catalog['HALPHA_FLUX'][full_mask] / FSF.catalog['HBETA_FLUX'][full_mask]))
+
+    EBV = E_beta_alpha / (k_lambda_2000(6563) - k_lambda_2000(4861))
+
+    H_alpha_flux_int = FSF.catalog['HALPHA_FLUX'][full_mask] * 10 ** (0.4 * k_lambda_2000(6563) * EBV)
+
+    # Pull in the aperture ratio dictonary - this is for the r-band aperture ratio
+
+    tids = FSF.catalog['TARGETID'][full_mask]
+    ap_dict = calc_aperture()
+
+    # Now construct the g-r to Ha/r arrays to fit the curve
+
+    # First, pull in fiber fluxes and tractor fluxes
+
+    dr9_tids = DR9.catalog['TARGETID']
+    r_fiber_flux = DR9.catalog['FIBERFLUX_R']
+    g_fiber_flux = DR9.catalog['FIBERFLUX_G']
+    r_model_flux = DR9.catalog['FLUX_R']
+    g_model_flux = DR9.catalog['FLUX_G']
+
+    # Convert all to magnitudes and calculate colors, create dictionaries
+
+    r_fiber_mag = -2.5 * np.log10(r_fiber_flux)
+    g_fiber_mag = -2.5 * np.log10(g_fiber_flux)
+    gr_fiber_color = g_fiber_mag - r_fiber_mag
+    fiber_color_dict = dict(zip(dr9_tids, gr_fiber_color))
+
+    r_model_mag = -2.5 * np.log10(r_model_flux)
+    g_model_mag = -2.5 * np.log10(g_model_flux)
+    gr_model_color = g_model_mag - r_model_mag
+    model_color_dict = dict(zip(dr9_tids, gr_model_color))
+
+    # Create a dictionary for the r-band as well
+
+    r_flux_dict = dict(zip(dr9_tids, r_fiber_flux))
+
+    # Match all the colors from DR9 with the Ha data from fastspecfit
+
+    f_ratio = []
+    fiber_gr_array = []
+    model_gr_array = []
+    tid_array = []
+
+    for i, tid in enumerate(tids):
+        try:
+            rat = r_flux_dict[tid]
+            f_ratio.append(H_alpha_flux_int[i]/rat)
+            fiber_gr_array.append(fiber_color_dict[tid])
+            model_gr_array.append(model_color_dict[tid])
+            tid_array.append(tid)
+        except KeyError:
+            pass
+
+    f_ratio = np.array(f_ratio)
+    fiber_gr_array = np.array(fiber_gr_array)
+    model_gr_array = np.array(model_gr_array)
+
+    # Perform a linear fit to the Ha/r (fiber) vs g-r (fiber) plot
+
+    linear_fit = np.polyfit(fiber_gr_array, np.log10(f_ratio), 1)
+    slope = linear_fit[0]
+    print(f"slope: {slope}")
+
+    # Pulling from all the different dictionaries, calculate the aperture-corrected H alpha
+
+    F_ha_appcorr_array = []
+
+    for i, tid in enumerate(tid_array):
+        try:
+            r_ratio = ap_dict[tid]
+            F_ha_appcorr = H_alpha_flux_int[i] * r_ratio# * slope * (model_gr_array[i] - fiber_gr_array[i])
+            print(H_alpha_flux_int[i], F_ha_appcorr, r_ratio, slope, model_gr_array[i] - fiber_gr_array[i])
+
+            F_ha_appcorr_array.append(F_ha_appcorr)
+        except KeyError:
+            # This should never happen - all these dictionaries should be complete by this point.
+            print("Something's wrong")
+            pass
+
+    ha_appcorr_dict = dict(zip(tid_array, np.array(F_ha_appcorr_array)))
+
+    return ha_appcorr_dict
+
+    """
+    #plt.scatter(gr_array, np.log10(f_ratio), marker='.', alpha=0.01)
+    plt.hist2d(gr_array, np.log10(f_ratio), bins=100)
+    plt.xlim(0.1, 1.4)
+    plt.ylim(-7.5, 5)
+    plt.xlabel("g - r (from fiber fluxes)")
+    plt.ylabel(r"$\log(F_{H\alpha, int}/F_{r, fiber})$")
+    plt.show()
+    """
+
+
+def plot_halpha_ratio():
+    halpha_snr_mask = FSF.catalog['HALPHA_AMP'] * np.sqrt(FSF.catalog['HALPHA_AMP_IVAR']) > SNR_LIM
+    hbeta_snr_mask = FSF.catalog['HBETA_AMP'] * np.sqrt(FSF.catalog['HBETA_AMP_IVAR']) > SNR_LIM
+    fsf_full_mask = generate_combined_mask(FSF_BGS_MASK, halpha_snr_mask, hbeta_snr_mask)
+
+    E_beta_alpha = 2.5 * np.log10(
+        2.86 / (FSF.catalog['HALPHA_FLUX'][fsf_full_mask] / FSF.catalog['HBETA_FLUX'][fsf_full_mask]))
+
+    EBV = E_beta_alpha / (k_lambda_2000(6563) - k_lambda_2000(4861))
+
+    H_alpha_flux_int = FSF.catalog['HALPHA_FLUX'][fsf_full_mask] * 10 ** (0.4 * k_lambda_2000(6563) * EBV)
+
+
+    #g_mag = FSF.catalog['ABSMAG01_SDSS_G'][full_mask]
+    #r_mag = FSF.catalog['ABSMAG01_SDSS_R'][full_mask]
+    #gr_color = g_mag - r_mag
+
+
+    redshifts = FSF.catalog['Z'][fsf_full_mask]
+    tids = FSF.catalog['TARGETID'][fsf_full_mask]
+    #ap_dict = calc_aperture()
+    #aper_ratios = [ap_dict[key] for key in tids]
+
+    dr9_tids = DR9.catalog['TARGETID']
+    r_fiber_flux = -2.5 * np.log10(DR9.catalog['FIBERFLUX_R'])
+    g_fiber_flux = -2.5 * np.log10(DR9.catalog['FIBERFLUX_G'])
+
+    f_ratio = []
+    gr_array =[]
+
+    for i, tid in enumerate(tids):
+        try:
+            rat = r_flux_dict[tid]
+            f_ratio.append(H_alpha_flux_int[i]/rat)
+            gr_array.append(gr_color[i])
+        except KeyError:
+            pass
+
+    f_ratio = np.array(f_ratio)
+    gr_array = np.array(gr_array)
+
+    plt.scatter(gr_array, np.log10(f_ratio), marker='.', alpha=0.01)
+    plt.xlim(-0.2, 1.5)
+    plt.ylim(-7.5, 5)
+    plt.xlabel("g - r")
+    plt.ylabel(r"$\log{F_{H\alpha, int}/F_{r, fiber}}$")
+    plt.show()
+
+
+def ident_bad_fits():
+    results = read_cigale_results()
+    bad_fits = results['id'][results['best.reduced_chi_square'] > 10]
+    #print(bad_fits)
+    #with open('/Users/simonwright/Desktop/bad_fits.txt', 'w') as f:
+    #    for i in bad_fits:
+    #        f.write(str(i)+'\n')
+    generate_cigale_input_table(custom_tids=bad_fits)
+
+
+def chi_vs_flux():
+    results = read_cigale_results()
+    tids = results['id']
+    chi2 = results['best.reduced_chi_square']
+
+    W4Flux = DR9.catalog['FLUX_W4']
+    W3Flux = DR9.catalog['FLUX_W3']
+    W2Flux = DR9.catalog['FLUX_W2']
+    W1Flux = DR9.catalog['FLUX_W1']
+    GFlux = DR9.catalog['FLUX_G']
+    RFlux = DR9.catalog['FLUX_R']
+    ZFlux = DR9.catalog['FLUX_Z']
+    LSTid = DR9.catalog['TARGETID']
+
+    print("making ")
+
+    w4_dict = dict(zip(LSTid, W4Flux))
+    w3_dict = dict(zip(LSTid, W3Flux))
+    w2_dict = dict(zip(LSTid, W2Flux))
+    w1_dict = dict(zip(LSTid, W1Flux))
+    g_dict = dict(zip(LSTid, GFlux))
+    r_dict = dict(zip(LSTid, RFlux))
+    z_dict = dict(zip(LSTid, ZFlux))
+
+    chi_list = []
+    flux_list = []
+
+    print("starting loop")
+    for i, tid in enumerate(tids):
+        try:
+            w4_flux = w4_dict[tid]
+            w3_flux = w3_dict[tid]
+            w2_flux = w2_dict[tid]
+            w1_flux = w1_dict[tid]
+            g_flux = g_dict[tid]
+            r_flux = r_dict[tid]
+            z_flux = z_dict[tid]
+
+            chi = chi2[i]
+
+            if chi > 10:
+                neg_flag = 0
+                for i in [w4_flux, w3_flux, w2_flux, w1_flux, g_flux, r_flux, z_flux]:
+                    if i < 0:
+                        neg_flag = 1
+                if neg_flag == 0:
+                    print(f"{tid} has chi squared {chi} with no negative fluxes.")
+
+
+
+            #flux_list.append(flux)
+            #chi_list.append(chi2[i])
+        except KeyError:
+            pass
+
+    #chi_list = np.array(chi_list)
+    #flux_list = np.array(flux_list)
+
+    #plt.scatter(chi_list, flux_list, alpha=0.1)
+    #plt.xlabel(r"$\chi^2$")
+    #plt.ylabel("W4 Flux (nmgy)")
+    #plt.show()
+
+
+
+
 def main():
 
     #fsf = FSFCatalog()
@@ -1315,37 +1900,37 @@ def main():
     #primary_program_dict = zpix.generate_primary_dict()
     #fsf.add_primary_to_table(primary_program_dict)
 
-    global FSF_BGS_MASK, DR9_BGS_MASK, LSS, FSF, DR9, SNR_LIM
+    global FSF_BGS_MASK, DR9_BGS_MASK, LSS, FSF, DR9, CC, SNR_LIM
     SNR_LIM = 3
     # The FSF_BGS_MASK contains the cuts made at the catalog level, z <= .4, and removes failed redshifts
     # There are no SNR cuts in place as of now, as those are made on a per-line basis.
     LSS, FSF, DR9, FSF_BGS_MASK, DR9_BGS_MASK = generate_bgs_mask()
+    #CC = CombinedCatalog()
 
-    #wise_m = all_WISE_mstars()
+    #analyze_chi2_cigale()
 
-    #plt.hist(wise_m['MSTAR'], bins=100)
-    #plt.xlabel(r'$m_{\star}$ ($m_{\odot}$)')
-    #plt.show()
+    #ident_bad_fits()
 
+    #plot_aper_z()
+    #plot_halpha_ratio()
+
+    #chi_vs_flux()
+
+    #generate_cigale_input_table(custom_tids=[39627733935853845])
     #generate_cigale_input_table()
-    #snr_cut_test_plot()
-    #calc_SFR_Halpha()
-    #compare_sfr()
+    #plot_k()
     #compare_stellar_mass()
+    compare_sfr()
     #compare_stellar_mass_vs_catalog()
-    #compare_electron_density()
-    compare_stellar_mass()
-    #luminosity_functions()
-    #plot_oii_rat_vs_stellar_mass()
-    #plot_sii_rat_vs_stellar_mass()
-    #plot_bpt_diag()
-    #plot_bpt_hist()
-    #plot_loii_vs_redshift()
-    #print(calc_mstar_WISE_color(496.86493, 316.6975, 0.12383684362225736)
+    #for snr in (3, 5, 7, 10, 15, 20):
+    #    SNR_LIM = snr
+    #    compare_electron_density()
+
 
     #for i in range(0,11):
     #    SNR_LIM = i
     #    hist_electron_density()
+
 
 
 if __name__ == '__main__':
