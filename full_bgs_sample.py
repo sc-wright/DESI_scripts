@@ -18,7 +18,7 @@ from astropy.cosmology import FlatLambdaCDM
 
 import pandas as pd
 
-from utility_scripts import get_lum, generate_combined_mask
+from utility_scripts import get_lum, generate_combined_mask, CustomTimer
 from spectrum_plot import Spectrum
 
 import time
@@ -273,7 +273,6 @@ class DR9Catalog:
         self.specprod_dir = f'{my_dir}/public/edr/spectro/redux/{self.specprod}'
         self.dr9CatalogsDir = f'{my_dir}/public/edr/vac/edr/lsdr9-photometry/{self.specprod}/v2.1/observed-targets'
 
-        # reads in the entire BGS_ANY catalog. Quality cuts are already implemented.
         self.catalog = Table.read(f'{self.dr9CatalogsDir}/targetphot-sv3-{self.specprod}.fits')
 
     def add_redshift_to_table(self):
@@ -585,12 +584,12 @@ def plot_sii_rat_vs_stellar_mass(mass_range=False):
     plt.subplots_adjust(wspace=.0, top=0.99)
     axs = [ax_main, ax_yDist]
     sp = ax_main.scatter(stellar_mass[plot_mask], sii_rat[plot_mask], c=colr[plot_mask], marker='.', alpha=0.3, vmax=41.5, vmin=39)
-    fig.colorbar(sp, ax=axs, label=r"$L_{[SII]}$", location='top')
+    fig.colorbar(sp, ax=axs, label=r"$L_{[SII]} \mathrm{\ [erg\ s}^{-1} \mathrm{]}$", location='top')
     ax_main.text(0.005, 1.005, f'total: {sum(plot_mask)}, snr $>$ {SNR_LIM}',
              horizontalalignment='left',
              verticalalignment='bottom',
              transform=ax_main.transAxes)
-    ax_main.set(xlabel=r"$\log{M_{\star}}$", ylabel="$\lambda 6716 / \lambda 6731$", ylim=(0, 2))
+    ax_main.set(xlabel=r"$\log{M_{\star}/M_\odot}$", ylabel="$\lambda 6731 / \lambda 6716$", ylim=(0, 2))
 
     ax_yDist.hist(sii_rat[plot_mask], bins=100, orientation='horizontal', align='mid')
     ax_yDist.set(xlabel='count')
@@ -602,6 +601,52 @@ def plot_sii_rat_vs_stellar_mass(mass_range=False):
         plt.savefig('figures/sii_ratio_vs_mass_lsiicol_m=({:.1f}'.format(mass_range[0]) + ',{:.1f}'.format(mass_range[1]) + ').png')
     else:
         plt.savefig("figures/sii_ratio_vs_mass_lsiicol.png", dpi=800)
+    plt.show()
+
+def plot_oii_rat_vs_stellar_mass(mass_range=False):
+    """
+    Plots the SII doublet ratio vs the stellar mass with a histogram of the ratios
+    Note: Stellar mass may be overestimated in v3.2 of the fastspecfit catalog
+
+    :param mass_range: tuple with 2 floats: low and high end of the mass range to plot, respectively
+    :return:
+    """
+
+    full_mask = generate_oii_snr_mask()
+
+    sii_rat = FSF.catalog['OII_DOUBLET_RATIO'][full_mask]
+    stellar_mass = FSF.catalog['LOGMSTAR'][full_mask]
+    colr = FSF.catalog['OII_COMBINED_LUMINOSITY'][full_mask]
+
+    if mass_range:
+        plot_mask = generate_combined_mask([stellar_mass >= mass_range[0], stellar_mass < mass_range[1]])
+    else:
+        plot_mask = np.ones(len(stellar_mass), dtype=bool)
+
+    fig = plt.figure(figsize=(5, 6))
+    gs = GridSpec(2, 4)
+    ax_main = plt.subplot(gs[0:2, :3])
+    ax_yDist = plt.subplot(gs[0:2, 3], sharey=ax_main)
+    plt.subplots_adjust(wspace=.0, top=0.99)
+    axs = [ax_main, ax_yDist]
+    sp = ax_main.scatter(stellar_mass[plot_mask], sii_rat[plot_mask], c=colr[plot_mask], marker='.', alpha=0.3, vmax=41.5, vmin=39)
+    fig.colorbar(sp, ax=axs, label=r"$L_{[OII]} \mathrm{\ [erg\ s}^{-1} \mathrm{]}$", location='top')
+    ax_main.text(0.005, 1.005, f'total: {sum(plot_mask)}, snr $>$ {SNR_LIM}',
+             horizontalalignment='left',
+             verticalalignment='bottom',
+             transform=ax_main.transAxes)
+    ax_main.set(xlabel=r"$\log{M_{\star}/M_\odot}$", ylabel="$\lambda 3726 / \lambda 3729$", ylim=(0, 2))
+
+    ax_yDist.hist(sii_rat[plot_mask], bins=100, orientation='horizontal', align='mid')
+    ax_yDist.set(xlabel='count')
+
+    ax_yDist.invert_xaxis()
+    ax_yDist.yaxis.tick_right()
+
+    if mass_range:
+        plt.savefig('figures/oii_ratio_vs_mass_lsiicol_m=({:.1f}'.format(mass_range[0]) + ',{:.1f}'.format(mass_range[1]) + ').png')
+    else:
+        plt.savefig("figures/oii_ratio_vs_mass_lsiicol.png", dpi=800)
     plt.show()
 
 
@@ -736,8 +781,36 @@ def calc_SFR_Halpha():
     return halpha_sfr_table
 
 
-
 def calc_sfr_corrected_halpha():
+    # This version uses the APERCORR_R from the FSF catalog
+
+    halpha_snr_mask = FSF.catalog['HALPHA_AMP'] * np.sqrt(FSF.catalog['HALPHA_AMP_IVAR']) > SNR_LIM
+    hbeta_snr_mask = FSF.catalog['HBETA_AMP'] * np.sqrt(FSF.catalog['HBETA_AMP_IVAR']) > SNR_LIM
+    full_mask = generate_combined_mask(FSF_BGS_MASK, halpha_snr_mask, hbeta_snr_mask)
+
+    redshifts = FSF.catalog['Z'][full_mask]
+    tids = FSF.catalog['TARGETID'][full_mask]
+
+    E_beta_alpha = 2.5 * np.log10(
+        2.86 / (FSF.catalog['HALPHA_FLUX'][full_mask] / FSF.catalog['HBETA_FLUX'][full_mask]))
+
+    EBV = E_beta_alpha / (k_lambda_2000(6563) - k_lambda_2000(4861))
+
+    ha_flux = FSF.catalog['HALPHA_FLUX'][full_mask] * 10 ** (0.4 * k_lambda_2000(6563) * EBV)
+
+    # perform aperture correction
+    #ha_flux = ha_flux * FSF.catalog['APERCORR_R'][full_mask]
+
+    ha_lum = get_lum(ha_flux, redshifts)
+
+    ha_sfr_log = np.log10(ha_lum) - 41.27
+
+    halpha_sfr_table = pd.DataFrame(list(zip(tids, ha_sfr_log)), columns=['TARGETID', 'LOG_SFR'])
+
+    return halpha_sfr_table
+
+
+def calc_sfr_corrected_halpha_by_hand():
 
     halpha_snr_mask = FSF.catalog['HALPHA_AMP'] * np.sqrt(FSF.catalog['HALPHA_AMP_IVAR']) > SNR_LIM
     hbeta_snr_mask = FSF.catalog['HBETA_AMP'] * np.sqrt(FSF.catalog['HBETA_AMP_IVAR']) > SNR_LIM
@@ -767,8 +840,6 @@ def calc_sfr_corrected_halpha():
     # using the method from Kennicutt 1998 (as listed in https://arxiv.org/pdf/2312.00300 sect 3.3)
     halpha_sfr = halpha_lum * 7.9E-42
 
-    #halpha_sfr_dict = dict(zip(success_tid, halpha_sfr))
-    #return halpha_sfr_dict
 
     halpha_sfr_table = pd.DataFrame(list(zip(success_tid, halpha_sfr_log)), columns=['TARGETID', 'LOG_SFR'])
     #halpha_sfr_table = halpha_sfr_table.drop_duplicates()
@@ -1187,8 +1258,48 @@ def analyze_chi2_cigale():
     """
 
 
-def probe_cigale_results():
+def compare_cigale_sfr_vs_catalog():
     cigale_results = read_cigale_results()
+
+    my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
+
+    cigale_sfr_results = {cigale_results['id'][i]: cigale_results['bayes.sfh.sfr'][i] for i in range(len(cigale_results['id']))}
+    #catalog_results = Table.read(f'{my_dir}/public/edr/vac/edr/stellar-mass-emline/v1.0/edr_galaxy_stellarmass_lineinfo_v1.0.fits')
+    cigale_sfr = []
+    catalog_sfr = []
+
+    for i, tid in enumerate(FSF.catalog['TARGETID']):
+        try:
+            cm = np.log10(cigale_sfr_results[tid])
+            wm = FSF.catalog['SFR'][i]
+            if not np.isnan(cm) and not np.isnan(wm):
+                cigale_sfr.append(cm)
+                catalog_sfr.append(np.log10(wm))
+            if len(cigale_sfr) != len(catalog_sfr):
+                print(i) #something's gone wrong, this is the item that caused the problem
+                break
+        except KeyError:
+            pass
+
+    fig = plt.figure(figsize=(8, 10))
+    gs = GridSpec(4, 4)
+    ax_main = plt.subplot(gs[1:4, :3])
+    ax_yDist = plt.subplot(gs[1:4, 3], sharey=ax_main)
+    ax_xDist = plt.subplot(gs[0, :3], sharex=ax_main)
+    plt.subplots_adjust(wspace=.0, hspace=.0)#, top=0.95)
+    axs = [ax_main, ax_yDist]#, ax_xDist]
+    sp = ax_main.scatter(catalog_sfr, cigale_sfr, marker='+', alpha=0.05)
+    #ax_main.plot(np.linspace(7,13, 300), np.linspace(7, 13, 300), color='r')
+    ax_main.set(xlabel=r"SFR from catalog", ylabel=r"SFR from CIGALE")#, xlim=(7,13), ylim=(7,13))
+
+    ax_yDist.hist(cigale_sfr, bins=200, orientation='horizontal', align='mid')
+    #ax_xDist.hist(catalog_sfr, bins=200, orientation='vertical', align='mid')
+
+    ax_yDist.invert_xaxis()
+    ax_yDist.yaxis.tick_right()
+
+    ax_xDist.tick_params(top=True, labeltop=True, bottom=False, labelbottom=False)
+    plt.show()
 
 
 def compare_sfr():
@@ -1197,7 +1308,7 @@ def compare_sfr():
     os.path.expanduser('~') + '/Documents/school/research/cigale'
 
     cigale_sfr_results = {cigale_results['id'][i]: cigale_results['bayes.sfh.sfr'][i] for i in range(len(cigale_results['id']))}
-    halpha_sfr_table = calc_sfr_corrected_halpha()
+    halpha_sfr_table = calc_sfr_corrected_halpha_by_hand()
     aperture_dict = calc_aperture()
     cigale_sfr = []
     halpha_sfr = []
@@ -1221,10 +1332,31 @@ def compare_sfr():
     cigale_sfr = np.array(cigale_sfr)
     halpha_sfr = np.array(halpha_sfr)
 
-    print(cigale_sfr)
-    print(f"SFR Avg: {np.average(cigale_sfr)}, stdev: {np.std(cigale_sfr)}")
-    print(halpha_sfr)
-    print(f"SFR Avg: {np.average(halpha_sfr)}, stdev: {np.std(halpha_sfr)}")
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    ax.hist(halpha_sfr, bins=200)
+    ax.text(0.01, 0.99, f'mean: {np.average(halpha_sfr)}\nmedian: {np.median(halpha_sfr)}\nstdev: {np.std(halpha_sfr)}',
+        horizontalalignment='left',
+        verticalalignment='top',
+        transform=ax.transAxes)
+    ax.set(xlabel=r"SFR from $H\alpha$ ($\log{m_\star/m_\odot}$) (with my aperture correction including color)", xlim=(-8,2.5))
+    plt.show()
+
+
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    ax.hist(cigale_sfr, bins=200)
+    ax.text(0.01, 0.99, f'mean: {np.average(cigale_sfr)}\nmedian: {np.median(cigale_sfr)}\nstdev: {np.std(cigale_sfr)}',
+        horizontalalignment='left',
+        verticalalignment='top',
+        transform=ax.transAxes)
+    ax.set(xlabel=r"SFR from CIGALE ($\log{m_\star/m_\odot}$)", xlim=(-8,2.5))
+    plt.show()
+
+    #print(cigale_sfr)
+    #print(f"SFR Avg: {np.average(cigale_sfr)}, stdev: {np.std(cigale_sfr)}")
+    #print(halpha_sfr)
+    #print(f"SFR Avg: {np.average(halpha_sfr)}, stdev: {np.std(halpha_sfr)}")
 
     fig = plt.figure(figsize=(12, 10))
     gs = GridSpec(4, 4)
@@ -1235,7 +1367,7 @@ def compare_sfr():
     axs = [ax_main, ax_yDist]#, ax_xDist]
     sp = ax_main.scatter(halpha_sfr, halpha_sfr - cigale_sfr, marker='+', alpha=0.05)
     ax_main.plot(np.linspace(-10,10, 100), np.zeros(100), color='r')
-    ax_main.set(xlabel=r"SFR$_{H\alpha}$ [log(M$_\odot$/yr)]", ylabel=r"SFR$_{H\alpha}$ - SFR$_{CIGALE}$ [log(M$_\odot$/yr)]")#, xlim=(-9,4), ylim=(-10,4))
+    ax_main.set(xlabel=r"SFR$_{H\alpha}$ [log(M$_\odot$/yr)]", ylabel=r"SFR$_{H\alpha}$ - SFR$_{CIGALE}$ [log(M$_\odot$/yr)]", xlim=(-9,4), ylim=(-10,4))
     #ax_main.set(xlabel=r"$F_{r,model}/F_{r,aperture}$", ylabel=r"SFR$_{H\alpha}$ - SFR$_{CIGALE}$ [log(M$_\odot$/yr)]", xlim=(0,20), ylim=(-10,5))
 
     ax_yDist.hist(halpha_sfr - cigale_sfr, bins=200, orientation='horizontal', align='mid')
@@ -1455,7 +1587,7 @@ def plot_bpt_hist(loii_range=None):
 
 
     # Getting the highest and lowest OII luminosity for the high SNR (>3) sources to use as the limits for the color bar. Otherwise its all basically just one color
-    oii_lum = FSF.catalog['OII_COMBINED_LUMINOSITY'][FSF_BGS_MASK]
+    oii_lum = FSF.catalog['OII_COMBINED_LUMINOSITY_LOG'][FSF_BGS_MASK]
     #hisnr_oii_lum = oii_lum[FSF.catalog['OII_SUMMED_SNR'][FSF_BGS_MASK] > 3]
 
     if loii_range:
@@ -1472,7 +1604,7 @@ def plot_bpt_hist(loii_range=None):
     agn_line_3 = 2.144507*x_for_line_3 + 0.465028
 
     f, ax = plt.subplots()
-    plt.hist2d(np.log10(nii[full_mask]/ha[full_mask]), np.log10(oiii[full_mask]/hb[full_mask]), bins=100, range=((-2, 1), (-1.5, 2)), vmax=300)
+    plt.hist2d(np.log10(nii[full_mask]/ha[full_mask]), np.log10(oiii[full_mask]/hb[full_mask]), bins=100, range=((-2, 1), (-1.5, 2)), norm=mpl.colors.LogNorm())
     plt.plot(x_for_line_1, hii_agn_line, linestyle='dashed', color='w')
     plt.plot(x_for_line_2, composite_line_2, linestyle='dotted', color='r')
     plt.plot(x_for_line_3, agn_line_3, linestyle='dashdot', color='b')
@@ -1513,7 +1645,7 @@ def compare_electron_density():
     mean_n_sii = np.average(n_sii)
     stdev_n_sii = np.std(n_sii)
 
-    fig = plt.figure(figsize=(4, 4))
+    fig = plt.figure(figsize=(5, 5))
     gs = GridSpec(4, 4)
     ax_main = plt.subplot(gs[1:4, :3])
     ax_yDist = plt.subplot(gs[1:4, 3], sharey=ax_main)
@@ -1730,6 +1862,7 @@ def aperture_correct_ha():
     f_ratio = np.array(f_ratio)
     fiber_gr_array = np.array(fiber_gr_array)
     model_gr_array = np.array(model_gr_array)
+    r_rat = []
 
     # Perform a linear fit to the Ha/r (fiber) vs g-r (fiber) plot
 
@@ -1744,14 +1877,20 @@ def aperture_correct_ha():
     for i, tid in enumerate(tid_array):
         try:
             r_ratio = ap_dict[tid]
-            F_ha_appcorr = H_alpha_flux_int[i] * r_ratio# * slope * (model_gr_array[i] - fiber_gr_array[i])
-            print(H_alpha_flux_int[i], F_ha_appcorr, r_ratio, slope, model_gr_array[i] - fiber_gr_array[i])
+            r_rat.append(r_ratio)
+            F_ha_appcorr = H_alpha_flux_int[i] * r_ratio * 10 ** (slope * (model_gr_array[i] - fiber_gr_array[i]))
+            #print(H_alpha_flux_int[i], F_ha_appcorr, r_ratio, slope, model_gr_array[i] - fiber_gr_array[i])
 
             F_ha_appcorr_array.append(F_ha_appcorr)
         except KeyError:
             # This should never happen - all these dictionaries should be complete by this point.
             print("Something's wrong")
             pass
+
+    #plt.hist(r_rat, bins=10000)
+    #plt.xlim(0,25)
+    #plt.xlabel(r"$f_{r,tractor}/f_{r,ap}$")
+    #plt.show()
 
     ha_appcorr_dict = dict(zip(tid_array, np.array(F_ha_appcorr_array)))
 
@@ -1763,7 +1902,7 @@ def aperture_correct_ha():
     plt.xlim(0.1, 1.4)
     plt.ylim(-7.5, 5)
     plt.xlabel("g - r (from fiber fluxes)")
-    plt.ylabel(r"$\log(F_{H\alpha, int}/F_{r, fiber})$")
+    plt.ylabel(r"$\log(F_{H\alpha}/F_{r, fiber})$")
     plt.show()
     """
 
@@ -1780,11 +1919,9 @@ def plot_halpha_ratio():
 
     H_alpha_flux_int = FSF.catalog['HALPHA_FLUX'][fsf_full_mask] * 10 ** (0.4 * k_lambda_2000(6563) * EBV)
 
-
     #g_mag = FSF.catalog['ABSMAG01_SDSS_G'][full_mask]
     #r_mag = FSF.catalog['ABSMAG01_SDSS_R'][full_mask]
     #gr_color = g_mag - r_mag
-
 
     redshifts = FSF.catalog['Z'][fsf_full_mask]
     tids = FSF.catalog['TARGETID'][fsf_full_mask]
@@ -1882,15 +2019,13 @@ def chi_vs_flux():
         except KeyError:
             pass
 
-    #chi_list = np.array(chi_list)
-    #flux_list = np.array(flux_list)
 
-    #plt.scatter(chi_list, flux_list, alpha=0.1)
-    #plt.xlabel(r"$\chi^2$")
-    #plt.ylabel("W4 Flux (nmgy)")
-    #plt.show()
-
-
+def plot_half_light_radius():
+    hl_radius = DR9.catalog['SHAPE_R'][DR9_BGS_MASK]
+    plt.hist(hl_radius, bins=100)
+    plt.yscale('log')
+    plt.xlabel('Half-light radius (")')
+    plt.show()
 
 
 def main():
@@ -1915,12 +2050,19 @@ def main():
     #plot_halpha_ratio()
 
     #chi_vs_flux()
+    #aperture_correct_ha()
+    #plot_half_light_radius()
+    #plot_bpt_hist()
+    #plot_sii_rat_vs_stellar_mass()
+    #plot_oii_rat_vs_stellar_mass()
+    #compare_electron_density()
 
     #generate_cigale_input_table(custom_tids=[39627733935853845])
     #generate_cigale_input_table()
     #plot_k()
     #compare_stellar_mass()
     compare_sfr()
+    #compare_cigale_sfr_vs_catalog()
     #compare_stellar_mass_vs_catalog()
     #for snr in (3, 5, 7, 10, 15, 20):
     #    SNR_LIM = snr

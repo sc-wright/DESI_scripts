@@ -22,7 +22,6 @@ import pandas as pd
 import desispec.io                             # Input/Output functions related to DESI spectra
 from desispec import coaddition                # Functions related to coadding the spectra
 
-
 import fitsio
 
 from desiutil.dust import dust_transmission
@@ -322,7 +321,6 @@ class Spectrum:
             #oii_vshift = data['OII_3726_VSHIFT'][fsf_target_mask][0]
             #oii_zshift = oii_vshift*1000/mks.c + 1
 
-
             sii_rat = data['SII_DOUBLET_RATIO'][fsf_target_mask][0]
             sii_snr_16 = data['SII_6716_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['SII_6716_AMP_IVAR'][fsf_target_mask][0])
             sii_snr_31 = data['SII_6731_MODELAMP'][fsf_target_mask][0] * np.sqrt(data['SII_6731_AMP_IVAR'][fsf_target_mask][0])
@@ -519,7 +517,7 @@ class Spectrum:
 
             # plotting oii spectrum
             ax2.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
-                     color='maroon', alpha=0.5)
+                     color='black', alpha=0.4)
             #ax2.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                      #color='k', lw=1.0)
             ax2.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
@@ -538,7 +536,7 @@ class Spectrum:
 
             # plotting nev spectrum
             ax3.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
-                     color='maroon', alpha=0.5)
+                     color='black', alpha=0.4)
             #ax3.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                      #color='k', lw=1.0)
             ax3.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
@@ -554,7 +552,7 @@ class Spectrum:
 
             # plotting hb spectrum
             ax4.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
-                     color='maroon', alpha=0.5)
+                     color='black', alpha=0.4)
             #ax4.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                      #color='k', lw=1.0)
             ax4.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
@@ -570,7 +568,7 @@ class Spectrum:
 
             # plotting oiii spectrum
             ax5.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
-                     color='maroon', alpha=0.5)
+                     color='black', alpha=0.4)
             #ax5.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                      #color='k', lw=1.0)
             ax5.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
@@ -587,7 +585,7 @@ class Spectrum:
 
             # plotting nii spectrum
             ax6.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
-                     color='maroon', alpha=0.5)
+                     color='black', alpha=0.4)
             #ax6.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                      #color='k', lw=1.0)
             ax6.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
@@ -606,7 +604,7 @@ class Spectrum:
 
             # plotting sii spectrum
             ax7.plot(coadd_spec.wave['brz'] / zFact, coadd_spec.flux['brz'][0] / mw_transmission_spec,
-                     color='maroon', alpha=0.5)
+                     color='black', alpha=0.4)
             #ax7.plot(coadd_spec.wave['brz'] / zFact, convolve(coadd_spec.flux['brz'][0], Gaussian1DKernel(5)),
                      #color='k', lw=1.0)
             ax7.plot(modelwave / zFact, np.sum(models, axis=1).flatten(), label='Final Model', ls='-', color='red', linewidth=1)
@@ -829,8 +827,8 @@ def cigale_failed_target_plot():
 
 def main():
     #make_plots()
-    #spec_plot()
-    cigale_failed_target_plot()
+    spec_plot()
+    #cigale_failed_target_plot()
 
 
 

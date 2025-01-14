@@ -1,9 +1,31 @@
 import numpy as np
 import os
-import wget
-from pathlib import Path
 from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
+import time
+
+
+class CustomTimer:
+    def __init__(self, dlen, calcstr=''):
+        self.t = time.time()
+        self.lastFullSecElapsed = int(time.time() - self.t)
+        self.dataLength = int(dlen)
+        if calcstr != '':
+            self.calcstr = ' ' + str(calcstr)
+        else:
+            self.calcstr = calcstr
+    def update_time(self, i):
+        elapsed = time.time() - self.t
+        fullSecElapsed = int(elapsed)
+        if fullSecElapsed > self.lastFullSecElapsed:
+            self.lastFullSecElapsed = fullSecElapsed
+            percent = 100 * (i + 1) / self.dataLength
+            totalTime = elapsed / (percent / 100)
+            remaining = totalTime - elapsed
+            trString = (f"Calculating{self.calcstr}, " + str(int(percent)) + "% complete. approx "
+                        + str(int(remaining) // 60) + "m" + str(int(remaining) % 60) + "s remaining...")
+            print('\r' + trString, end='', flush=True)
+
 
 def check_files(desi_id, specprod = 'fuji', my_dir = '/Documents/school/research/desidata'):
     """
