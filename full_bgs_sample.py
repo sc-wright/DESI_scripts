@@ -1,3 +1,15 @@
+
+
+
+
+########################################################################################################################
+
+# NOTE: This file is deprecated. Its functions have been split off into catalog_build.py and analyze_sample.py.
+#       Please use those scripts instead.
+
+########################################################################################################################
+
+
 import os
 
 import matplotlib as mpl

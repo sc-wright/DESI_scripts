@@ -642,7 +642,6 @@ class Spectrum:
         specfile = f'{self.healpix_dir}/{self.survey}/{self.program}/{healpix // 100}/{healpix}/coadd-{self.survey}-{self.program}-{healpix}.fits'
         fastfile = self.fastspec_dir + f'/healpix/{self.survey}/{self.program}/{healpix // 100}/{healpix}/fastspec-{self.survey}-{self.program}-{healpix}.fits.gz'
 
-
         meta = Table(fitsio.read(fastfile, 'METADATA'))
         fast = Table(fitsio.read(fastfile, 'FASTSPEC'))
 
@@ -665,10 +664,7 @@ class Spectrum:
 
         #print(meta.columns)
 
-
-
         mw_transmission_spec = dust_transmission(coadd_spec.wave[bands], meta['EBV'][meta['TARGETID'] == self.targetid])
-
 
         #print(coadd_spec.flux[bands].flatten())
         #print(len(coadd_spec.flux[bands][meta['TARGETID'] == self.targetid]))
@@ -803,9 +799,9 @@ def spec_plot():
     #    spec.check_for_files()
     #    spec.plot_spectrum(foldstruct="spectra/possible_agn/")
 
-    spec = Spectrum(targetid=39627734053293709)
+    spec = Spectrum(targetid=39627740105672264)
     spec.check_for_files()
-    spec.plot_spectrum()  # this makes the plot and saves it
+    spec.plot_spectrum(display_plot=True)  # this makes the plot and saves it
     #spec.gen_qa_fig()
     #spec.fetch_models()
 
