@@ -31,11 +31,23 @@ import time
 
 
 def master_mask():
+    """
+    This generates a catalog-level mask with 3 criteria:
+    -Selection criteria from lss catalog + zwarn = 0
+    -z <= 0.4
+    -effective radius  <= 7/1.5  (for purposes of aperture/color gradient correction)
+    :return: boolean array (catalog length)
+    """
     bgs_mask = generate_combined_mask(CC.catalog['ZWARN'] == 0, CC.catalog['Z'] <= 0.4, CC.catalog['SHAPE_R']* 1.5 <= 7)
     return bgs_mask
 
 
 def hydrogen_snr_mask(snr_lim=5):
+    """
+    This generates a catalog-level mask with Halpha and Hbeta fluxes both above snr_lim
+    :param snr_lim: what snr to cut at. defaults to 5
+    :return: boolean array (catalog length)
+    """
     ha_snr_mask = CC.catalog['HALPHA_FLUX'] * np.sqrt(CC.catalog['HALPHA_FLUX_IVAR']) > snr_lim
     hb_snr_mask = CC.catalog['HBETA_FLUX'] * np.sqrt(CC.catalog['HBETA_FLUX_IVAR']) > snr_lim
     mask = generate_combined_mask(ha_snr_mask, hb_snr_mask)
@@ -43,6 +55,12 @@ def hydrogen_snr_mask(snr_lim=5):
 
 
 def hydrogen_snr_bgs_mask(snr_lim=5):
+    """
+    This generates a BGS-level mask with Halpha and Hbeta fluxes both above snr_lim
+    This results the same as convolving bgs mask with the above snr mask.
+    :param snr_lim: what snr to cut at. defaults to 5
+    :return: boolean array (bgs length)
+    """
     ha_snr_mask = CC.catalog['HALPHA_FLUX'][BGS_MASK] * np.sqrt(CC.catalog['HALPHA_FLUX_IVAR'][BGS_MASK]) > snr_lim
     hb_snr_mask = CC.catalog['HBETA_FLUX'][BGS_MASK] * np.sqrt(CC.catalog['HBETA_FLUX_IVAR'][BGS_MASK]) > snr_lim
     mask = generate_combined_mask(ha_snr_mask, hb_snr_mask)
@@ -50,21 +68,35 @@ def hydrogen_snr_bgs_mask(snr_lim=5):
 
 
 def mass_mask():
+    """
+    This generates a catalog-level mask that cuts out the most unphysical masses reported by CIGALE.
+    It should only be used for some diagnostic purposes
+    :return: boolean array (catalog length)
+    """
     return CC.catalog['MSTAR_CIGALE'] > 1
 
 
 def compare_stellar_mass():
+    """
+    Compares and plots the stellar masses derived from WISE color and CIGALE
+    :return: none
+    """
 
+    # Make SNR cut of 10 for WISE bands 1 and 2
     w1_mask = CC.catalog['FLUX_W1'] * np.sqrt(CC.catalog['FLUX_IVAR_W1']) > 10
     w2_mask = CC.catalog['FLUX_W2'] * np.sqrt(CC.catalog['FLUX_IVAR_W2']) > 10
 
     mask = generate_combined_mask(w1_mask, w2_mask, CC.catalog['MSTAR_WISE'] != 0, CC.catalog['MSTAR_CIGALE'] != 0, CC.catalog['ZWARN'] == 0)
 
+    # Extract WISE color and CIGALE derived masses from custom catalog
     wise_mstar = CC.catalog['MSTAR_WISE'][mask]
     cigale_mstar = CC.catalog['MSTAR_CIGALE'][mask]
 
+    # Take the difference between the two
     difference = wise_mstar - cigale_mstar
 
+    # Plot the comparison for diagnostic purposes
+    # 2-axis histogram scatter plot
     fig = plt.figure(figsize=(8, 6))
     gs = GridSpec(4, 4)
     ax_main = plt.subplot(gs[1:4, :3])
@@ -89,6 +121,11 @@ def compare_stellar_mass():
 
 
 def check_sfr():
+    """
+    This plots histograms of SFR as calculated by CIGALE and with Halpha
+    :return: none
+    """
+
     cigale_sfr = np.array(CC.catalog['SFR_CIGALE'])
     halpha_sfr = np.array(CC.catalog['SFR_HALPHA'])
 
@@ -110,8 +147,13 @@ def check_sfr():
     plt.xlabel("SFR (halpha)")
     plt.show()
 
-def compare_sfr():
 
+def compare_sfr():
+    """
+    This plots comparisons between the SFR as determined by CIGALE and Halpha flux.
+    **ADD MORE DETAIL**
+    :return: none
+    """
     snr_lim = 3
 
     cigale_sfr = np.array(CC.catalog['SFR_CIGALE'])
@@ -209,7 +251,6 @@ def compare_sfr():
     ax_xDist.tick_params(top=True, labeltop=True, bottom=False, labelbottom=False)
     plt.show()
 
-
     fig = plt.figure(figsize=(8, 6))
     gs = GridSpec(4, 4)
     ax_main = plt.subplot(gs[1:4, :3])
@@ -237,6 +278,10 @@ def compare_sfr():
 
 
 def compare_sfr_snr():
+    """
+    ider what this does. Can probably be deleted.
+    :return:
+    """
     cigale_sfr = np.array(CC.catalog['SFR_CIGALE'])
     halpha_sfr = np.array(CC.catalog['SFR_HALPHA'])
 
@@ -265,19 +310,11 @@ def compare_sfr_snr():
     plt.show()
 
 
-def quick_ebv_comparison():
-    snr_lim = 5
-    ha_snr_mask = CC.catalog['HALPHA_AMP'] * np.sqrt(CC.catalog['HALPHA_AMP_IVAR']) > snr_lim
-    hb_snr_mask = CC.catalog['HBETA_AMP'] * np.sqrt(CC.catalog['HBETA_AMP_IVAR']) > snr_lim
-    mask = generate_combined_mask(ha_snr_mask, hb_snr_mask, CC.catalog['ZWARN'] == 0, CC.catalog['Z'] <= 0.4)
-    ebv_catalog = CC.catalog['EBV'][mask]
-    ebv_calculated = CC.catalog['EBV_CALC'][mask]
-    plt.scatter(ebv_catalog, ebv_calculated, alpha=0.2, marker='.')
-    plt.xlabel("E(B-V) from DR9")
-    plt.ylabel("E(B-V) calculated by hand")
-    plt.show()
-
 def plot_color_excess_vs_sfr_comparison():
+    """
+    Plots E(B-V) against the difference between Halpha and CIGALE SFR
+    :return: none
+    """
     snr_lim = 5
 
     cigale_sfr = np.array(CC.catalog['SFR_CIGALE'])
@@ -301,17 +338,49 @@ def plot_color_excess_vs_sfr_comparison():
 
 
 def extract_high_sfr():
+    """
+    ***ALSO DEPRECATED. CAN LIKELY DELETE
+    :return:
+    """
     tids = [x for _, x in sorted(zip(CC.catalog['SFR_HALPHA'], CC.catalog['TARGETID']))]
     tids.reverse()
     print(tids[:20])
 
+
+def signed_power_law(x, a, b):
+    """
+    Generic power law function for use in fitting algorithms
+    :param x:
+    :param a:
+    :param b:
+    :return:
+    """
+    return -a * x**b
+
+
+def exp_decay(x, a, b):
+    """
+    Generic exponential decay function for use in fitting algorithms
+    :param x:
+    :param a:
+    :param b:
+    :return:
+    """
+    return -a * np.exp(-b * x)
+
+
 def check_color_ratio():
+    """
+    ***NOT SURE WHAT THIS DOES EITHER. CHECK FOR DEPENDENCIES AND DOCUMENT/DELETE
+    :return: none
+    """
+
     snr_lim = 5
     ha_snr_mask = CC.catalog['HALPHA_AMP'] * np.sqrt(CC.catalog['HALPHA_AMP_IVAR']) > snr_lim
     hb_snr_mask = CC.catalog['HBETA_AMP'] * np.sqrt(CC.catalog['HBETA_AMP_IVAR']) > snr_lim
-    balmer_snr_mask =  generate_combined_mask(ha_snr_mask, hb_snr_mask)
+    balmer_snr_mask = generate_combined_mask(ha_snr_mask, hb_snr_mask)
 
-    # Convert table columns to a NumPy array (faster than list comprehensions)
+    # Convert table columns to a NumPy array (faster than list comprehension)
     arr = np.array([CC.catalog['APFLUX_G'], CC.catalog['APFLUX_R'], CC.catalog['APFLUX_Z']])  # Shape (3, N, 8)
     # Check if all elements are zero along the last axis (8-tuple elements)
     is_zero_tuple = np.all(arr != 0, axis=-1)  # Shape (3, N)
@@ -333,7 +402,6 @@ def check_color_ratio():
     g_array = np.zeros(7)
     r_array = np.zeros(7)
     z_array = np.zeros(7)
-
 
     for i in range(1, 8):
         g_array[i-1] = np.mean(apflux_g[:, i])/sm_g
@@ -370,26 +438,25 @@ def check_color_ratio():
 
 
 def calc_color():
-
+    """
+    Calculates g-r color for all catalog objects
+    :return: float array of g-r color (catalog length)
+    """
     mag_g = CC.catalog['ABSMAG01_SDSS_G'] - CC.catalog['KCORR01_SDSS_G']
     mag_r = CC.catalog['ABSMAG01_SDSS_R'] - CC.catalog['KCORR01_SDSS_R']
 
     gr_col = mag_g - mag_r
 
-    #mask = CC.catalog["ZWARN"] == 0
-
     return gr_col
+
 
 def angular_to_physical_radius(theta_e_arcsec, z):
     """
     Converts an angular effective radius in arcseconds to a physical radius in kpc.
 
-    Parameters:
-    - theta_e_arcsec: Effective radius in arcseconds
-    - z: Redshift
-
-    Returns:
-    - Physical effective radius in kpc
+    :param theta_e_arcsec: effective radius in arcseconds (value or array)
+    :param z: redshift (value or array)
+    :return: physical effective radius in kpc (singular value or array)
     """
 
     # Convert angular diameter distance from Mpc to kpc
@@ -404,17 +471,13 @@ def angular_to_physical_radius(theta_e_arcsec, z):
     return R_e_kpc
 
 
-def signed_power_law(x, a, b):
-    return -a * x**b
-
-
-def exp_decay(x, a, b):
-    return -a * np.exp(-b * x)
-
-
 def identify_agn(input_mask):
-
-    snr_lim = 1
+    """
+    Function to identify BPT AGN for any subsample
+    :param input_mask: catalog-length boolean array define subsample to check for AGN
+    :return: catalog-length boolean array to mask for BPT agn
+    """
+    snr_lim = 3
 
     nii = CC.catalog['NII_6584_FLUX'][input_mask]
     nii_snr = nii/(np.sqrt(1/CC.catalog['NII_6584_FLUX_IVAR'][input_mask]))
@@ -428,9 +491,9 @@ def identify_agn(input_mask):
     # removing all cases where the selected line flux is zero, since log(0) and x/0 are undefined
     zero_mask = generate_combined_mask(nii != 0.0, ha != 0.0, oiii != 0.0, hb != 0.0)
 
+    # Requiring all lines to have at least SNR of 1
     full_mask = generate_combined_mask(zero_mask, nii_snr > snr_lim, ha_snr > snr_lim, oiii_snr > snr_lim, hb_snr > snr_lim)
 
-    # These are BGS-length
     nh = np.log10(nii / ha)  # this is the x-axis on bpt diagram
     oh = np.log10(oiii / hb)
 
@@ -504,7 +567,7 @@ def sfr_ms():
 
     specific_sfr = np.log10((10**sfr) / 10**(mstar))
 
-    sSFR_cut = -1e10
+    sSFR_cut = -10
 
     passive_galaxy_mask = specific_sfr > sSFR_cut
 
@@ -518,20 +581,23 @@ def sfr_ms():
 
     plt.hist2d(mstar, sfr, bins=(200,70), norm=mpl.colors.LogNorm())
     plt.plot(x, y, color='r', label='polynomial fit')
-    plt.plot(x, y2, color='k', linestyle='--', label='sSFR cut')
+    #plt.plot(x, y2, color='k', linestyle='--', label='sSFR cut')
     plt.xlim(8, 11.5)
     plt.ylim(-3, 2.5)
-    plt.xlabel(r'$M_\star [\log{M_\odot}]$')
-    plt.ylabel(r'SFR [$\log{M_\odot/yr}$]')
+    plt.colorbar(label='count')
+    plt.title("SFR main sequence with sSFR cut of $10^{-10}$")
+    plt.xlabel(r'$\log{M_\star/M_\odot}$')
+    plt.ylabel(r'$\log{M_\odot/yr}$')
     plt.legend(loc='upper left')
     plt.show()
 
     plt.hist2d(mstar, specific_sfr, bins=(200,70), norm=mpl.colors.LogNorm())
     plt.plot(x, np.ones(len(x))*sSFR_cut, color='k', linestyle='--', label='sSFR cut')
     plt.xlim(8, 11.5)
+    plt.colorbar(label='count')
     #plt.ylim(-.35, .35)
     plt.xlabel(r'$\log{M_\star/M_\odot}$')
-    plt.ylabel(r'$\log{SFR / yr}$')
+    plt.ylabel(r'$\log{SFR / M_\star}$')
     plt.legend(loc='upper left')
     plt.show()
 
@@ -648,8 +714,6 @@ def sfr_mstar_plots():
     plt.xlim(-3, 2.5)
     plt.ylim(-2, 4)
     plt.show()
-
-    quit()
 
     sfr_mask = generate_combined_mask(~np.isnan(np.log10(ne)), ~np.isnan(sfr))
     mstar_mask = generate_combined_mask(~np.isnan(np.log10(ne)), ~np.isnan(mstar))
@@ -809,7 +873,6 @@ def sfr_mstar_vs_ne_plots():
     plt.savefig('figures/ne_plots/ne_mass_2dhist_logscale.png')
     plt.show()
 
-
     ne_75 = []
     ne_50 = []
     ne_25 = []
@@ -855,8 +918,6 @@ def sfr_mstar_vs_ne_plots():
     plt.ylim(1, 3)
     plt.savefig('figures/ne_plots/ne_sfr_2dhist_logscale.png')
     plt.show()
-
-
 
 
 def distance_from_ms(mass, sfr, o1, o2, c):
@@ -932,6 +993,7 @@ def plot_sfr_ha_binned():
         plt.xlabel(r'$M_\star [\log{M_\odot}]$')
         plt.ylabel(r'$\Delta$ SFR [$\log{M_\odot/yr}$]')
     """
+
 
 def sfr_mass_ne_colorplot():
 
@@ -1126,7 +1188,6 @@ def sfr_mass_ne_colorplot_largebin():
     plt.show()
 
 
-
 def delta_sfr_mass_ne_colorplot():
     ##################
 
@@ -1149,9 +1210,7 @@ def delta_sfr_mass_ne_colorplot():
 
     distance = distance_from_ms(mstar, sfr, o1, o2, c)
 
-
     ###################
-
 
     # Define the number of bins
     # comment out when using large bins for matching histograms
@@ -1248,7 +1307,6 @@ def plot_ne_distribution_OLD():
     sii_ratio = CC.catalog['SII_DOUBLET_RATIO'][BGS_MASK]
     oii_ratio = oii_ratio[combined_ratio_mask]
     sii_ratio = sii_ratio[combined_ratio_mask]
-
 
     axis_size = 14
 
@@ -1464,6 +1522,7 @@ def generate_ne_split_snr(snr_lim=5):
     ne = np.array(ne)
 
     return ne, ne_mask
+
 
 def ne_histogram_binned():
 
@@ -1742,7 +1801,6 @@ def sfr_sd_vs_ne_plots():
     plt.savefig('figures/ne_plots/ne_sfr_2dhist_logscale.png')
     plt.show()
 
-
     plt.hist2d(sfr_sd, sfr, bins=150, norm=mpl.colors.LogNorm())
     #plt.plot(sfrrange, ne_25, color='r', linestyle='dashed')
     #plt.plot(sfrrange, ne_50, color='r')
@@ -1837,7 +1895,6 @@ def run_analysis_scripts():
     #check_color_ratio()
     #sfr_sd()
     #sfrsd_mass_ne_colorplot()
-
 
     # remaking all ne plots
     #plot_ne_distribution()
