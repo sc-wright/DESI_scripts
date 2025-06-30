@@ -82,6 +82,7 @@ class CustomCatalog:
         print("calculating sfr from h alpha...")
         # First do balmer correction (record extinction)
         sfr_ebv = self.balmer_correction()
+        #quit()
         self.catalog['HALPHA_BALMER'] = sfr_ebv[0]
         self.catalog['EBV'] = sfr_ebv[1]
         self.catalog['A_HALPHA'] = sfr_ebv[2]
@@ -397,13 +398,19 @@ class CustomCatalog:
         return mstar_array
 
     def add_electron_density_oii(self):
-
+        """
+        This calculation comes from the formula determined in Sanders+16
+        :return:
+        """
         a = 0.3771
         b = 2468
         c = 638.4
 
         R = 1 / self.catalog['OII_DOUBLET_RATIO']
+        R[np.where(R < 0.3839)] = np.nan
+        R[np.where(R > 1.4558)] = np.nan
         n = (c * R - a * b) / (a - R)
+
         return n
 
     def add_electron_density_sii(self):
@@ -413,6 +420,8 @@ class CustomCatalog:
         c = 627.1
 
         R = 1 / self.catalog['SII_DOUBLET_RATIO']
+        R[np.where(R < 0.4375)] = np.nan
+        R[np.where(R > 1.4484)] = np.nan
         n = (c * R - a * b) / (a - R)
         return n
 
@@ -456,12 +465,12 @@ class CustomCatalog:
         EBV_s = EBV * 0.44  # this comes from Calzetti+2000
         A_halpha = self.k_lambda_2000(6563) * EBV_s
         #print(sum(np.array(A_halpha < 0, dtype=bool)))
+        print(A_halpha)
 
-        # A_Halpha should not be less than 0, but we do see a few due to error
+        # It should be unphysical for A(Ha) to be less than 0
         # We go ahead and turn anything less than 0 into zero, making the balmer correction 1
         bad_a = np.where(A_halpha < 0)
         A_halpha[bad_a] = 0
-        #print(sum(np.array(A_halpha < 0, dtype=bool)))
 
         # There are also cases where the value could not be calculated (usually due to zeros in the catalog)
         # We remove those here and replace them with nans.
