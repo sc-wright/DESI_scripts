@@ -70,3 +70,16 @@ def sfr_ms(plot=False):
 def distance_from_ms(mass, sfr, o1, o2, c):
     dist = sfr - (o1 * mass**2 + o2 * mass + c)
     return dist
+
+
+def calc_color():
+    """
+    Calculates g-r color for all catalog objects
+    :return: float array of g-r color (catalog length)
+    """
+    mag_g = CC.catalog['ABSMAG01_SDSS_G'] - CC.catalog['KCORR01_SDSS_G']
+    mag_r = CC.catalog['ABSMAG01_SDSS_R'] - CC.catalog['KCORR01_SDSS_R']
+
+    gr_col = mag_g - mag_r
+
+    return gr_col

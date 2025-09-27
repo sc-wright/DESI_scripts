@@ -4,6 +4,9 @@ from astropy.cosmology import FlatLambdaCDM
 import astropy.units as u
 import time
 
+#from sample_masks import BGS_SNR_MASK, BGS_MASK
+
+
 
 class CustomTimer:
     def __init__(self, dlen, calcstr=''):
@@ -89,6 +92,7 @@ def get_lum(f, z):
     D_l = cosmo.luminosity_distance(z).cgs.value #this puts dL in cm
     f = f * 1E-17 #flux in erg/cm^2 now
     return f*4*np.pi*D_l**2
+
 
 def generate_combined_mask(*masks):
     """

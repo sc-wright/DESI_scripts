@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 
 from import_custom_catalog import CC
 from utility_scripts import get_lum, generate_combined_mask, CustomTimer
@@ -149,6 +148,95 @@ def bgs_ne_snr_cut(snr_lim=5):
     return ne, ne_mask
 
 
+def bgs_oii_ne_snr_cut(snr_lim=5):
+    # First calculate SNR for OII and SII in the BGS sample. Masks are BGS length
+    oii_1_snr = CC.catalog['OII_3726_FLUX'][BGS_MASK] * np.sqrt(CC.catalog['OII_3726_FLUX_IVAR'][BGS_MASK]) > snr_lim
+    oii_2_snr = CC.catalog['OII_3729_FLUX'][BGS_MASK] * np.sqrt(CC.catalog['OII_3729_FLUX_IVAR'][BGS_MASK]) > snr_lim
+    oii_snr = generate_combined_mask(oii_1_snr, oii_2_snr)  # mask for oii - catalog length
+    # We will only be using oii in this case
+    combined_snr = oii_snr  # bgs length
+
+    # Import the ne from both OII and SII
+    ne_oii = CC.catalog['NE_OII'][BGS_MASK]  # ne values, bgs length
+
+    # The locations with values are the inverse of the masked array mask
+    valid_oii_mask = ~ne_oii.mask
+
+    # The values are the data out of these masked arrays
+    ne_oii_vals = ne_oii.data
+
+    # This deals with any cases where the ratio is outside the valid range of the analytical equation from Sanders+2016
+    positive_ne_oii = ne_oii_vals > 0
+
+    # Require snr > 5 and positive ne values (negative values are outside the range of Sanders+2016 equation)
+    ne_mask = valid_oii_mask & combined_snr & positive_ne_oii
+
+    # Taking log but silencing warnings because mask will handle the undefined values
+    # Save the current settings
+    old_settings = np.seterr(all='ignore')
+    # Taking log
+    ne_oii = np.log10(ne_oii_vals)
+    # Restore original settings
+    np.seterr(**old_settings)
+
+    # This ensures ne_mask is a fully filled boolean array rather than a masked array - easier to count
+    ne_mask = ne_mask.filled(False)
+
+    # Take the average of the two electron densities
+    ne = ne_oii
+
+    # ne and ne_mask are both BGS length
+    return ne, ne_mask
+
+
+def bgs_sii_ne_snr_cut(snr_lim=5):
+    """
+    Generates a float array of valid ne values and a BGS-length boolean array for those values.
+    Valid ne values are those where the total snr > 5 for all lines
+    :param snr_lim: Changes the required snr for electron density. Default 5
+    :return: float array of ne values (BGS length), boolean array mask for ne values (BGS length)
+    """
+
+    # First calculate SNR for OII and SII in the BGS sample. Masks are BGS length
+    sii_1_snr = CC.catalog['SII_6716_FLUX'][BGS_MASK] * np.sqrt(CC.catalog['SII_6716_FLUX_IVAR'][BGS_MASK]) > snr_lim
+    sii_2_snr = CC.catalog['SII_6731_FLUX'][BGS_MASK] * np.sqrt(CC.catalog['SII_6731_FLUX_IVAR'][BGS_MASK]) > snr_lim
+    sii_snr = generate_combined_mask(sii_1_snr, sii_2_snr)  # mask for sii - catalog length
+    # Now we & them to find the objects with high enough snr for both
+    combined_snr = sii_snr  # bgs length
+
+    # Import the ne from both OII and SII
+    ne_sii = CC.catalog['NE_SII'][BGS_MASK]  # ne values, bgs length
+
+    # The locations with values are the inverse of the masked array mask
+    valid_sii_mask = ~ne_sii.mask
+
+    # The values are the data out of these masked arrays
+    ne_sii_vals = ne_sii.data
+
+    # This deals with any cases where the ratio is outside the valid range of the analytical equation from Sanders+2016
+    positive_ne_sii = ne_sii_vals > 0
+
+    # Require snr > 5 and positive ne values (negative values are outside the range of Sanders+2016 equation)
+    ne_mask = valid_sii_mask & combined_snr & positive_ne_sii
+
+    # Taking log but silencing warnings because mask will handle the undefined values
+    # Save the current settings
+    old_settings = np.seterr(all='ignore')
+    # Taking log
+    ne_sii = np.log10(ne_sii_vals)
+    # Restore original settings
+    np.seterr(**old_settings)
+
+    # This ensures ne_mask is a fully filled boolean array rather than a masked array - easier to count
+    ne_mask = ne_mask.filled(False)
+
+    # Take the average of the two electron densities
+    ne = np.array(ne_sii)
+
+    # ne and ne_mask are both BGS length
+    return ne, ne_mask
+
+
 def bgs_combined_snr_mask():
     """
     This generates a BGS-length mask that includes all SNR cuts:
@@ -232,6 +320,47 @@ def redshift_complete_mask():
     lo_z_bin = (mass > mass_lo_10) & (sfr > sfr_lo_10) & (redshift < z50) & BGS_SNR_MASK
 
     return lo_z_bin, hi_z_bin, z50, z90, mass_lo_10, mass_hi_10, sfr_lo_10, sfr_hi_10
+
+
+def get_galaxy_type_mask(sample_mask=BGS_MASK):
+    """
+    Returns boolean mask of hii, composite, agn, and shock galaxies based on BPT region
+    returned mask is length left after sample_mask is applied
+    therefore this mask should be used *after* the chosen sample mask
+    :param sample_mask:
+    :return:
+    """
+
+    # potentially change this so instead of a flat snr cut we keep uncertainties
+    # and find other ways to deal with it
+    snr_lim = 3#SNR_LIM
+
+    # Extracting line fluxes from the catalog.
+    # All are BGS length
+    nii = CC.catalog['NII_6584_FLUX'][BGS_MASK]
+    nii_snr = nii * np.sqrt(CC.catalog['NII_6584_FLUX_IVAR'][BGS_MASK])
+    ha = CC.catalog['HALPHA_FLUX'][BGS_MASK]
+    oiii = CC.catalog['OIII_5007_FLUX'][BGS_MASK]
+    oiii_snr = oiii * np.sqrt(CC.catalog['OIII_5007_FLUX_IVAR'][BGS_MASK])
+    hb = CC.catalog['HBETA_FLUX'][BGS_MASK]
+
+    # removing all cases where the selected line flux is zero, since log(0) and x/0 are undefined
+    # all input masks are BGS length
+    bpt_mask = generate_combined_mask(nii_snr > snr_lim, oiii_snr > snr_lim)
+
+    nh = np.log10(nii / ha)  # x-axis
+    oh = np.log10(oiii / hb) # y-axis
+
+    hii_boundary = lambda x: 0.61/(x - 0.05) + 1.3          # black dashed
+    agn_boundary = lambda x: 0.61 / (x - 0.47) + 1.19       # red dotted
+    shock_boundary = lambda x: 2.144507*x + 0.465028        # blue dotdash
+
+    hii_object_mask         = (oh < agn_boundary(nh)) & (oh < hii_boundary(nh))         # below both red and black lines
+    agn_object_mask         = (oh > agn_boundary(nh)) & (oh > shock_boundary(nh))       # above both red and blue
+    composite_object_mask   = (oh > hii_boundary(nh)) & (oh < agn_boundary(nh))         # above black and below red
+    shock_object_mask       = (oh > agn_boundary(nh)) & (oh < shock_boundary(nh))       # above red and below blue
+
+    return hii_object_mask, agn_object_mask, composite_object_mask, shock_object_mask
 
 
 global LO_Z_MASK                                    # BGS-length

@@ -18,7 +18,6 @@ from matplotlib.gridspec import GridSpec
 plt.rcParams['text.usetex'] = True
 #import smplotlib
 
-import seaborn as sns
 
 import numpy as np
 from scipy import stats
@@ -35,7 +34,7 @@ from spectrum_plot import Spectrum
 
 import time
 
-
+"""
 # import DESI related modules -
 import desispec.io                             # Input/Output functions related to DESI spectra
 from desispec import coaddition                # Functions related to coadding the spectra
@@ -52,6 +51,7 @@ from desitarget.sv1.sv1_targetmask import desi_mask as sv1mask
 from desitarget.sv2.sv2_targetmask import desi_mask as sv2mask
 from desitarget.sv3.sv3_targetmask import desi_mask as sv3mask
 from desitarget.targetmask import desi_mask as specialmask
+"""
 
 
 class LSSCatalog:
@@ -1181,7 +1181,7 @@ def generate_cigale_input_table(custom_tids = None):
 
                     file.write(write_str)
 
-                # bok section - release 9011
+                # bok section - release 9011 - northern hemisphere
 
                 elif emm_dict[tid][0] in [9011]:
                     write_str += f'{tid}\t{fsf_redshifts[i]}'

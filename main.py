@@ -1,3 +1,10 @@
+
+# This file is deprecated and no longer used.
+
+
+print("set 'run' to 'current file'.")
+
+"""
 from utility_scripts import check_files, get_lum
 
 import os
@@ -307,12 +314,11 @@ def add_col_to_table(table, colstr, data):
         table[colstr][i] = v
 
     #write_table_to_disk(table)
-
-
+"""
+"""
 #THIS FUNCTION IS DEPRECATED. USE THE OTHER FUNCTIONS IN COMBINATION.
 def pull_spec_data(sepPlot=False, scatter=False, hist=False):
 
-    """
     #### Making directory refs and reading tables #### (Don't use this anymore)
 
     my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
@@ -327,7 +333,6 @@ def pull_spec_data(sepPlot=False, scatter=False, hist=False):
 
     fastSpecTable = Table.read(f'{fssCatalogsDir}/fastspec-fuji.fits', hdu=1)
     fastSpecTableMeta = Table.read(f'{fssCatalogsDir}/fastspec-fuji.fits', hdu=2)
-    """
 
     fastSpecTable = spec_type_in_fsf()
 
@@ -442,7 +447,8 @@ def pull_spec_data(sepPlot=False, scatter=False, hist=False):
         plt.savefig('histogram of oii luminosity stacked.png')
         plt.legend()
         plt.show()
-
+"""
+"""
 
 def make_BGS_filter(table, metaTable=None):
     # creates a binary mask to select objects in sv3 with a calculated OII luminosity of type tracer
@@ -712,7 +718,6 @@ def main():
     #zcat = spec_type()
     #pull_spec_data(hist=True)
     #check_rows()
-    """
     try:
         my_dir = os.path.expanduser('~') + '/Documents/school/research/desidata'
         specprod = 'fuji'
@@ -726,8 +731,6 @@ def main():
         add_lum_to_table(fsfData)
         snr = calculate_oii_snr(fsfData)
         add_col_to_table(fsfData, "OII_SUMMED_SNR", snr)
-        write_table_to_disk(fsfData)
-    """
 
     #spec_type_in_fsf()
 
@@ -755,3 +758,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+"""

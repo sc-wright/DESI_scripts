@@ -104,6 +104,9 @@ class CustomCatalog:
         self.catalog['NE_OII'] = self.add_electron_density_oii()
         self.catalog['NE_SII'] = self.add_electron_density_sii()
 
+        print("adding metallicity...")
+        self.catalog['METALLICITY_O3N2'] = self.add_metallicity()
+
         print("done.")
 
     def read_FSF_catalog(self):
@@ -128,6 +131,7 @@ class CustomCatalog:
                        'OII_3729_MODELAMP', 'OII_3729_AMP', 'OII_3729_AMP_IVAR',
                        'OII_3729_FLUX', 'OII_3729_FLUX_IVAR', 'OII_3729_NPIX',
                        'HBETA_MODELAMP', 'HBETA_AMP', 'HBETA_AMP_IVAR', 'HBETA_FLUX', 'HBETA_FLUX_IVAR',
+                       'OIII_4959_MODELAMP', 'OIII_4959_AMP', 'OIII_4959_AMP_IVAR', 'OIII_4959_FLUX', 'OIII_4959_FLUX_IVAR',
                        'OIII_5007_MODELAMP', 'OIII_5007_AMP', 'OIII_5007_AMP_IVAR', 'OIII_5007_FLUX', 'OIII_5007_FLUX_IVAR',
                        'NII_6548_MODELAMP', 'NII_6548_AMP', 'NII_6548_AMP_IVAR', 'NII_6548_FLUX', 'NII_6548_FLUX_IVAR',
                        'HALPHA_MODELAMP', 'HALPHA_AMP', 'HALPHA_AMP_IVAR', 'HALPHA_FLUX', 'HALPHA_FLUX_IVAR',
@@ -455,7 +459,6 @@ class CustomCatalog:
 
         return k
 
-
     def balmer_correction(self):
         # We calculate the extinction corrected value for every source. We can then filter by SNR later as we choose
 
@@ -638,6 +641,35 @@ class CustomCatalog:
         area_pc2 = radius_kpc ** 2 * np.pi
         sfrsd = np.log10(aperture_sfr / area_pc2)
         return sfrsd
+
+    def add_metallicity(self):
+        oiii_5007_flux = np.array(self.catalog['OIII_5007_FLUX'])
+        oiii_5007_err_inv = np.array(np.sqrt(self.catalog['OIII_5007_FLUX_IVAR']))
+        nii_6584_flux = np.array(self.catalog['NII_6584_FLUX'])
+        nii_6584_err_inv = np.array(np.sqrt(self.catalog['NII_6584_FLUX_IVAR']))
+        halpha_flux = np.array(self.catalog['HALPHA_FLUX'])
+        halpha_flux_err_inv = np.array(np.sqrt(self.catalog['HALPHA_FLUX_IVAR']))
+        hbeta_flux = np.array(self.catalog['HBETA_FLUX'])
+        hbeta_flux_err_inv = np.array(np.sqrt(self.catalog['HBETA_FLUX_IVAR']))
+
+        oiii_5007_snr = oiii_5007_flux * oiii_5007_err_inv
+        nii_6584_snr = nii_6584_flux * nii_6584_err_inv
+        halpha_snr = halpha_flux * halpha_flux_err_inv
+        hbeta_snr = hbeta_flux * hbeta_flux_err_inv
+
+        snr_lim = 3
+
+        # This is just the o3n2 metallicity lines
+        metallicity_mask = generate_combined_mask(oiii_5007_snr > snr_lim, nii_6584_snr > snr_lim, halpha_snr > snr_lim,
+                                                  hbeta_snr > snr_lim)
+
+        # 03N2 from Pettini & Pagel 2004
+        O3N2 = np.log10((oiii_5007_flux / hbeta_flux) / (nii_6584_flux / halpha_flux))
+
+        # From PP04
+        o3n2_metallicity = 8.73 - 0.32 * O3N2
+
+        return o3n2_metallicity
 
 
     def parse_cigale_results(self):
