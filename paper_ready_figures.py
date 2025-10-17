@@ -124,7 +124,8 @@ def plot_ne_distribution(sample_mask=BGS_SNR_MASK):
     ks_string = f"K-S test: p = {ne_oii_sii_ks.pvalue:.3e}"
     plt.text(0.02, 0.98, ks_string, ha='left', va='top', transform=ax.transAxes, fontsize=fs - 2)
     #plt.legend(loc='lower right')
-    plt.savefig('paper_figures/ne_ks.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig('paper_figures/ne_ks.png', dpi=PLOT_DPI)
     plt.show()
 
 
@@ -167,7 +168,8 @@ def plot_redshift_vs_mass_sfr():
              horizontalalignment='left',
              verticalalignment='top',
              transform=ax.transAxes, fontsize=fs-4)
-    plt.savefig(f'paper_figures/paper_mass_redshift.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/paper_mass_redshift.png', dpi=PLOT_DPI)
     plt.show()
 
     fig, ax = plt.subplots()
@@ -187,7 +189,8 @@ def plot_redshift_vs_mass_sfr():
              horizontalalignment='left',
              verticalalignment='top',
              transform=ax.transAxes, fontsize=fs-4)
-    plt.savefig(f'paper_figures/paper_sfr_redshift.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/paper_sfr_redshift.png', dpi=PLOT_DPI)
     plt.show()
 
 
@@ -326,7 +329,8 @@ def plot_sfr_ms(sample_mask=BGS_SNR_MASK, plot=True):
         plt.xlabel(r'$\log{M_\star/M_\odot}$', fontsize=fs)
         plt.ylabel(r'$\log{SFR/M_\odot/yr}$', fontsize=fs)
         plt.legend(loc='lower right')
-        plt.savefig(f'paper_figures/paper_sfr_ms_sample_{sample}.png', dpi=PLOT_DPI)
+        if PLOT_SAVE:
+            plt.savefig(f'paper_figures/paper_sfr_ms_sample_{sample}.png', dpi=PLOT_DPI)
         plt.show()
         """
         plt.hist2d(mstar, specific_sfr, bins=(200,70), norm=mpl.colors.LogNorm())
@@ -409,7 +413,8 @@ def plot_redshift_vs_ne(sample_mask=BGS_SNR_MASK):
     plt.xlim(0, 0.4)
     plt.ylim(0, 3.5)
     plt.colorbar(label="count")
-    plt.savefig(f'paper_figures/paper_ne_redshift_sample_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/paper_ne_redshift_sample_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
 
@@ -500,7 +505,8 @@ def plot_sfr_vs_mass_vs_ne(sample_mask=BGS_SNR_MASK):
     cbar.set_label(r'median $\log{n_e/cm^{-3}}$', fontsize=fs)
     plt.xlabel(r'$\log{M_\star/M_\odot}$', size=fs)
     plt.ylabel(r'$\log{SFR/M_\odot/yr}$', size=fs)
-    plt.savefig(f'paper_figures/sfr_vs_mstar_vs_ne_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/sfr_vs_mstar_vs_ne_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
     # Compute the count in each bin
@@ -543,7 +549,8 @@ def plot_sfr_vs_mass_vs_ne(sample_mask=BGS_SNR_MASK):
     cbar.set_label(r'count', fontsize=fs)
     plt.xlabel(r'$\log{M_\star/M_\odot}$', size=fs)
     plt.ylabel(r'$\log{SFR/M_\odot/yr}$', size=fs)
-    plt.savefig(f'paper_figures/sfr_vs_mstar_counts_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/sfr_vs_mstar_counts_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
     # Custom function to calculate iqr
@@ -589,7 +596,8 @@ def plot_sfr_vs_mass_vs_ne(sample_mask=BGS_SNR_MASK):
     cbar.set_label(r'IQR (dex)', fontsize=fs)
     plt.xlabel(r'$\log{M_\star/M_\odot}$', size=fs)
     plt.ylabel(r'$\log{SFR/M_\odot/yr}$', size=fs)
-    plt.savefig(f'paper_figures/sfr_vs_mstar_vs_iqr_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/sfr_vs_mstar_vs_iqr_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
 
@@ -667,7 +675,8 @@ def plot_sfrsd_vs_mass_vs_ne(sample_mask=BGS_SNR_MASK):
     cbar.set_label(r'median $\log{n_e}$ ($\log{}$cm$^{-3}$)', fontsize=fs)
     plt.xlabel(r'$\log{M_\star/M_\odot}$', size=fs)
     plt.ylabel(r'$\log{\Sigma_{SFR}/M_\odot/yr/kpc^2}$', size=fs)
-    plt.savefig(f'paper_figures/sfrsd_vs_mstar_vs_ne_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/sfrsd_vs_mstar_vs_ne_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
     # Compute the count in each bin
@@ -706,7 +715,8 @@ def plot_sfrsd_vs_mass_vs_ne(sample_mask=BGS_SNR_MASK):
     cbar.set_label(r'count', fontsize=fs)
     plt.xlabel(r'$\log{M_\star/M_\odot}$', size=fs)
     plt.ylabel(r'$\log{\Sigma_{SFR}/M_\odot/yr}$', size=fs)
-    plt.savefig(f'paper_figures/sfrsd_vs_mstar_counts_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/sfrsd_vs_mstar_counts_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
     # Custom function to calculate iqr
@@ -748,7 +758,8 @@ def plot_sfrsd_vs_mass_vs_ne(sample_mask=BGS_SNR_MASK):
     cbar.set_label(r'IQR (dex)', fontsize=fs)
     plt.xlabel(r'$\log{M_\star/M_\odot}$', size=fs)
     plt.ylabel(r'$\log{\Sigma_{SFR}/M_\odot/yr}$', size=fs)
-    plt.savefig(f'paper_figures/sfrsd_vs_mstar_vs_iqr_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/sfrsd_vs_mstar_vs_iqr_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
 
@@ -843,7 +854,8 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK):
     plt.colorbar(label='count')
     plt.xlim(massmin, massmax)
     plt.ylim(1, 3)
-    plt.savefig(f'paper_figures/paper_ne_vs_mass_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/paper_ne_vs_mass_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
     # Plot ne vs sfr
@@ -900,7 +912,8 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK):
     plt.colorbar(label='count')
     plt.xlim(sfrmin, sfrmax)
     plt.ylim(1, 3)
-    plt.savefig(f'paper_figures/paper_ne_vs_sfr_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/paper_ne_vs_sfr_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
 
@@ -969,7 +982,8 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK):
     plt.colorbar(label='count')
     plt.xlim(sfrsdmin, sfrsdmax)
     plt.ylim(1, 3)
-    plt.savefig(f'paper_figures/paper_ne_vs_sfrsd_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/paper_ne_vs_sfrsd_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
 
@@ -1087,10 +1101,13 @@ def plot_bpt_ne_color(sample_mask=BGS_SNR_MASK):
     #cbar = plt.colorbar(sm, ax=ax, label=r"$n_e$ (cm$^{-3}$)")
     plt.xlabel(r'$\log([N II]_{\lambda 6584} / H\alpha)$', fontsize=fs)
     plt.ylabel(r'$\log([O III]_{\lambda 5007} / H\beta)$', fontsize=fs)
-    plt.savefig(f'paper_figures/paper_bpt_ne_color_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/paper_bpt_ne_color_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
+    """
     # Perform K-S tests and make cumulative distributions
+    # This is now being done in the bpt_ks_tests() function
 
     out = ks_2samp(np.array(ne[hii_object_mask]), np.array(ne[agn_object_mask]))
     print(out.pvalue)
@@ -1106,6 +1123,8 @@ def plot_bpt_ne_color(sample_mask=BGS_SNR_MASK):
     plt.title("BPT AGN galaxies cumulative distribution " + sam_title)
     plt.xlim(1, 3)
     plt.show()
+    """
+
 
 
 def bpt_ks_tests():
@@ -1131,6 +1150,7 @@ def bpt_ks_tests():
     nh_lo = np.log10(nii[loz_mask] / ha[loz_mask])  # x-axis
     oh_lo = np.log10(oiii[loz_mask] / hb[loz_mask]) # y-axis
     ne_lo = ne[loz_mask]
+    print(len(ne_lo))
 
     nh_hi = np.log10(nii[hiz_mask] / ha[hiz_mask])  # x-axis
     oh_hi = np.log10(oiii[hiz_mask] / hb[hiz_mask]) # y-axis
@@ -1204,8 +1224,101 @@ def bpt_ks_tests():
     plt.text(0.02, 0.98, ks_string, ha='left', va='top', transform=ax.transAxes, fontsize=fs-2)
     plt.xlabel(r'$\log({n_e}/cm^{3}$)', fontsize=fs)
     plt.legend(loc='lower right')
-    plt.savefig('paper_figures/bpt_ks.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig('paper_figures/bpt_ks.png', dpi=PLOT_DPI)
     plt.show()
+
+
+def bpt_ks_test_pt_2():
+    snr_lim = 3#SNR_LIM
+
+    # Extracting line fluxes from the catalog.
+    # All are BGS length
+    nii = CC.catalog['NII_6584_FLUX'][BGS_MASK]
+    nii_snr = nii * np.sqrt(CC.catalog['NII_6584_FLUX_IVAR'][BGS_MASK])
+    ha = CC.catalog['HALPHA_FLUX'][BGS_MASK]
+    oiii = CC.catalog['OIII_5007_FLUX'][BGS_MASK]
+    oiii_snr = oiii * np.sqrt(CC.catalog['OIII_5007_FLUX_IVAR'][BGS_MASK])
+    hb = CC.catalog['HBETA_FLUX'][BGS_MASK]
+    ne, ne_mask = bgs_ne_snr_cut()
+
+    # removing all cases where the selected line flux is zero, since log(0) and x/0 are undefined
+    # all input masks are BGS length
+    bpt_mask = generate_combined_mask(nii_snr > snr_lim, oiii_snr > snr_lim)
+
+    loz_mask = generate_combined_mask(LO_Z_MASK, bpt_mask)
+    hiz_mask = generate_combined_mask(HI_Z_MASK, bpt_mask)
+
+    nh_lo = np.log10(nii[loz_mask] / ha[loz_mask])  # x-axis
+    oh_lo = np.log10(oiii[loz_mask] / hb[loz_mask]) # y-axis
+    ne_lo = ne[loz_mask]
+
+    nh_hi = np.log10(nii[hiz_mask] / ha[hiz_mask])  # x-axis
+    oh_hi = np.log10(oiii[hiz_mask] / hb[hiz_mask]) # y-axis
+    ne_hi = ne[hiz_mask]
+
+    hii_boundary = lambda x: 0.61/(x - 0.05) + 1.3          # black dashed
+    agn_boundary = lambda x: 0.61 / (x - 0.47) + 1.19       # red dotted
+    shock_boundary = lambda x: 2.144507*x + 0.465028        # blue dotdash
+
+    hii_lo_object_mask         = (oh_lo < agn_boundary(nh_lo)) & (oh_lo < hii_boundary(nh_lo))         # below both red and black lines
+    hii_hi_object_mask         = (oh_hi < agn_boundary(nh_hi)) & (oh_hi < hii_boundary(nh_hi))         # below both red and black lines
+
+    fs = 16
+    bins = np.linspace(1, 3, 40)
+    clrs_lo = [plt.cm.Blues(i) for i in np.linspace(0.4, 0.9, 2)]
+    clrs_hi = [plt.cm.Reds(i) for i in np.linspace(0.4, 0.9, 2)]
+
+    # Split HII galaxies in half and compare ne - low-z
+    median_hii_nh_lo = np.median(nh_lo[hii_lo_object_mask])
+    # Select only the hii objects for the n/h axis
+    nh_hii_objects = nh_lo[hii_lo_object_mask]
+    # Select only the hii objects for the electron density
+    ne_lo_hii = ne_lo[hii_lo_object_mask]
+    # Split the electron density in half by the n/h axis
+    ne_lo_lhs = ne_lo_hii[nh_hii_objects < median_hii_nh_lo]
+    ne_lo_rhs = ne_lo_hii[nh_hii_objects >= median_hii_nh_lo]
+    ne_ks_test_lo = ks_2samp(np.array(ne_lo_lhs), np.array(ne_lo_rhs))
+
+    fig, ax = plt.subplots()
+    counts, edges = np.histogram(ne_lo_lhs, bins=bins)
+    cdf = np.cumsum(counts) / np.sum(counts)
+    centers = 0.5 * (edges[1:] + edges[:-1])
+    ax.plot(centers, cdf, marker='o', mfc='none', label=r'low-z, low NII/H$\alpha$', color=clrs_lo[0])
+    counts, edges = np.histogram(ne_lo_rhs, bins=bins)
+    cdf = np.cumsum(counts) / np.sum(counts)
+    centers = 0.5 * (edges[1:] + edges[:-1])
+    ax.plot(centers, cdf, marker='o', mfc='none', label=r'low-z, high NII/H$\alpha$', color=clrs_lo[1])
+    # Don't show the plot yet, we're going to add the other set too
+
+    # Split HII galaxies in half and compare ne - hi-z
+    median_hii_nh_hi = np.median(nh_hi[hii_hi_object_mask])
+    # Select only the hii objects for the n/h axis
+    nh_hii_objects = nh_hi[hii_hi_object_mask]
+    # Select only the hii objects for the electron density
+    #print(len(hii_lo_object_mask))
+    #print(len(ne_lo))
+    ne_hi_hii = ne_hi[hii_hi_object_mask]
+    # Split the electron density in half by the n/h axis
+    ne_hi_lhs = ne_hi_hii[nh_hii_objects < median_hii_nh_hi]
+    ne_hi_rhs = ne_hi_hii[nh_hii_objects >= median_hii_nh_hi]
+    ne_ks_test_hi = ks_2samp(np.array(ne_hi_lhs), np.array(ne_hi_rhs))
+
+    counts, edges = np.histogram(ne_hi_lhs, bins=bins)
+    cdf = np.cumsum(counts) / np.sum(counts)
+    centers = 0.5 * (edges[1:] + edges[:-1])
+    ax.plot(centers, cdf, marker='o', mfc='none', label=r'all-z, low NII/H$\alpha$', color=clrs_hi[0])
+    counts, edges = np.histogram(ne_hi_rhs, bins=bins)
+    cdf = np.cumsum(counts) / np.sum(counts)
+    centers = 0.5 * (edges[1:] + edges[:-1])
+    ax.plot(centers, cdf, marker='o', mfc='none', label=r'all-z, high NII/H$\alpha$', color=clrs_hi[1])
+    plt.legend(loc='lower right')
+    ks_string = f"K-S test:\nlow-z:\tp = {ne_ks_test_lo.pvalue:.3e} \nall-z:\t p = {ne_ks_test_hi.pvalue:.3e}"
+    plt.text(0.02, 0.98, ks_string, ha='left', va='top', transform=ax.transAxes, fontsize=fs - 2)
+    plt.xlabel(r'$\log({n_e}/cm^{3}$)', fontsize=fs)
+    plt.legend(loc='lower right')
+    plt.show()
+
 
 
 def plot_ne_vs_sfrsd_binned(sample_mask=BGS_SNR_MASK):
@@ -1325,7 +1438,8 @@ def plot_ne_vs_sfrsd_binned(sample_mask=BGS_SNR_MASK):
         plt.title("all-z")
     plt.ylim(1.5, 3)
     plt.legend(fontsize=fs-8)
-    plt.savefig(f'paper_figures/paper_sfrsd_ne_binned_fits_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/paper_sfrsd_ne_binned_fits_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
 
@@ -1348,6 +1462,7 @@ def metallicity(sample_mask=BGS_SNR_MASK):
     tit = "custom sample"
     mlim = 0
     clr = 'k'
+    mcenter = 10
     if sample_mask is BGS_SNR_MASK:
         sample = 1
         tit = "all galaxies"
@@ -1361,6 +1476,7 @@ def metallicity(sample_mask=BGS_SNR_MASK):
         zlim = Z50
         clr = 'b'
         tit = 'low-z'
+        mcenter = 9.83454461143  # This is the median stellar mass in the bin
     elif sample_mask is HI_Z_MASK:
         sample = 3
         sample_mask = BGS_SNR_MASK & (sfr > SFR90) & (mass > M90)
@@ -1369,6 +1485,7 @@ def metallicity(sample_mask=BGS_SNR_MASK):
         zlim = Z90
         clr = 'r'
         tit = 'all-z'
+        mcenter = 10.19955620506
 
     oiii_5007_snr = oiii_5007_flux * oiii_5007_err_inv
     nii_6584_snr = nii_6584_flux * nii_6584_err_inv
@@ -1393,27 +1510,147 @@ def metallicity(sample_mask=BGS_SNR_MASK):
     mass_z_mask = generate_combined_mask(metallicity_mask, sfr > sfrlim, mass > 4, BGS_SNR_MASK, ~agn_galaxy_mask)
 
     plt.hist2d(mass[mass_z_mask], o3n2_metallicity[mass_z_mask], bins=(120, 90), norm=mpl.colors.LogNorm())
-    plt.vlines(mlim, 0, 20, color=clr)
+    plt.vlines(mlim, 0, 20, color=clr, label='Lower mass limit')
     plt.xlim(8, 11.5)
     plt.ylim(8, 9)
     plt.colorbar()
     plt.xlabel(r'$\log{M_\star/M_\odot}$')
     plt.ylabel(r'$12 + \log{O/H}$')
     plt.title(tit)
+    plt.legend()
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/mass-metallicity_relation_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
     # Keep all galaxies except for AGN, make note that most composite galaxies are in the high-mass region
     full_mask = generate_combined_mask(metallicity_mask, sample_mask, ~agn_galaxy_mask)
 
-    plt.hist2d(o3n2_metallicity[full_mask], ne[full_mask], bins=(120, 90), norm=mpl.colors.LogNorm())
+    plt.hist2d(o3n2_metallicity[full_mask], ne[full_mask], bins=(50, 50), norm=mpl.colors.LogNorm())
     plt.xlim(8.0, 9)
     plt.ylim(1, 3)
     plt.colorbar(label='count')
     plt.xlabel(r'$12 + \log{O/H}$', fontsize=fs)
     plt.ylabel(r'$\log{n_e/cm^{-3}}$', fontsize=fs)
     plt.title(tit)
+    if PLOT_SAVE:
+        plt.savefig(f"paper_figures/metallicity_ne_{sample}.png", dpi=PLOT_DPI)
     plt.show()
 
+    """
+    lowmass_metallicity_bin = generate_combined_mask(metallicity_mask, sample_mask, ~agn_galaxy_mask, mass > 4, mass < mcenter)
+
+    plt.hist2d(o3n2_metallicity[lowmass_metallicity_bin], ne[lowmass_metallicity_bin], bins=(50, 50), norm=mpl.colors.LogNorm())
+    plt.xlim(8.0, 9)
+    plt.ylim(1, 3)
+    plt.colorbar(label='count')
+    plt.xlabel(r'$12 + \log{O/H}$', fontsize=fs)
+    plt.ylabel(r'$\log{n_e/cm^{-3}}$', fontsize=fs)
+    plt.title(tit + " for $\log{M_\star} < $ " + f"{mcenter:.1f}")
+    plt.hlines(np.median(ne[lowmass_metallicity_bin]), 1, 10, color='k', label='Median $n_e$')
+    plt.legend()
+    if PLOT_SAVE:
+        plt.savefig(f"paper_figures/metallicity_ne_lowmass_{sample}.png", dpi=PLOT_DPI)
+    plt.show()
+
+    highmass_metallicity_bin = generate_combined_mask(metallicity_mask, sample_mask, ~agn_galaxy_mask, mass > 4, mass >= mcenter)
+
+    plt.hist2d(o3n2_metallicity[highmass_metallicity_bin], ne[highmass_metallicity_bin], bins=(50, 50), norm=mpl.colors.LogNorm())
+    plt.xlim(8.0, 9)
+    plt.ylim(1, 3)
+    plt.colorbar(label='count')
+    plt.xlabel(r'$12 + \log{O/H}$', fontsize=fs)
+    plt.ylabel(r'$\log{n_e/cm^{-3}}$', fontsize=fs)
+    plt.title(tit + " for $\log{M_\star} \geq $ " + f"{mcenter:.1f}")
+    plt.hlines(np.median(ne[highmass_metallicity_bin]), 1, 10, color='k', label='Median $n_e$')
+    plt.legend()
+    if PLOT_SAVE:
+        plt.savefig(f"paper_figures/metallicity_ne_highmass_{sample}.png", dpi=PLOT_DPI)
+    plt.show()
+    """
+
+    # --- Figure and grid layout ---
+    fig, axes = plt.subplots(
+        2, 1, figsize=(6.5, 8),
+        sharex=True, sharey=True,
+        gridspec_kw={'hspace': 0, 'right': 0.86}  # leave space on right for colorbar
+    )
+
+    # --- Low-mass bin ---
+    lowmass_metallicity_bin = generate_combined_mask(
+        metallicity_mask, sample_mask, ~agn_galaxy_mask, mass > 4, mass < mcenter
+    )
+
+    h1 = axes[0].hist2d(
+        o3n2_metallicity[lowmass_metallicity_bin],
+        ne[lowmass_metallicity_bin],
+        bins=(50, 50),
+        norm=mpl.colors.LogNorm()
+    )
+
+    axes[0].set_xlim(8.0, 9)
+    axes[0].set_ylim(1, 3)
+    axes[0].set_ylabel(r'$\log{n_e/cm^{-3}}$', fontsize=fs)
+    #axes[0].tick_params(labelbottom=True)  # show x ticks but not label
+    axes[0].set_xlabel("")  # no x label
+    axes[0].hlines(np.median(ne[lowmass_metallicity_bin]), 1, 10, color='k', label='Median $n_e$')
+    #axes[0].legend()
+    axes[0].text(
+        0.06, 1.01,
+        tit,
+        fontsize=fs, ha='center', va='bottom',
+        transform=axes[0].transAxes
+    )
+    # Add internal title text
+    axes[0].text(
+        8.02, 2.9,
+        f"$\log{{M_\\star}} < {mcenter:.1f}$",
+        fontsize=fs-2, ha='left', va='top',
+        bbox=dict(facecolor='white', edgecolor='none', alpha=0.7)
+    )
+
+    # --- High-mass bin ---
+    highmass_metallicity_bin = generate_combined_mask(
+        metallicity_mask, sample_mask, ~agn_galaxy_mask, mass > 4, mass >= mcenter
+    )
+
+    h2 = axes[1].hist2d(
+        o3n2_metallicity[highmass_metallicity_bin],
+        ne[highmass_metallicity_bin],
+        bins=(50, 50),
+        norm=mpl.colors.LogNorm()
+    )
+
+    axes[1].set_xlim(8.0, 9)
+    axes[1].set_ylim(1, 3)
+    axes[1].set_xlabel(r'$12 + \log{O/H}$', fontsize=fs)
+    axes[1].set_ylabel(r'$\log{n_e/cm^{-3}}$', fontsize=fs)
+    axes[1].hlines(np.median(ne[highmass_metallicity_bin]), 1, 10, color='k', label='Median $n_e$')
+    axes[1].legend(loc="lower left")
+
+    axes[1].text(
+        8.02, 2.9,
+        f"$\log{{M_\\star}} \geq {mcenter:.1f}$",
+        fontsize=fs-2, ha='left', va='top',
+        bbox=dict(facecolor='white', edgecolor='none', alpha=0.7)
+    )
+
+    # --- Keep identical tick positions but hide only the top label on the bottom panel ---
+    # Get the tick positions (shared because sharey=True)
+    yticks = axes[0].get_yticks()
+    # Ensure both axes use the same tick positions
+    axes[0].set_yticks(yticks)
+    axes[1].set_yticks(yticks)
+
+    # Hide only the top-most y tick LABEL on the bottom axes:
+    bottom_yticklabels = axes[1].get_yticklabels()
+    if bottom_yticklabels:
+        bottom_yticklabels[-1].set_visible(False)
+
+    # Place colorbar axes a bit to the right of the subplots area
+    cbar_ax = fig.add_axes([0.89, 0.12, 0.03, 0.755])  # [left, bottom, width, height] in figure coords
+    fig.colorbar(h1[3], cax=cbar_ax, label="count")
+
+    plt.show()
 
 def total_sfr_sd(sample_mask = BGS_SNR_MASK):
     sfr = CC.catalog['SFR_HALPHA'][BGS_MASK]
@@ -1583,15 +1820,10 @@ def total_sfr_sd(sample_mask = BGS_SNR_MASK):
     """
 
 
-
-
-
-
     # Plot ne vs sfr_sd
 
     # If we include all completeness cuts, all of the SFRSD < 0 disappear and I cannot figure out why
     trendline_mask = np.array(redshift_sample_mask & (mass >= mlim))
-
 
     sfrsd = sfrsd[trendline_mask]
     mass = mass[trendline_mask]
@@ -1656,12 +1888,9 @@ def total_sfr_sd(sample_mask = BGS_SNR_MASK):
     plt.colorbar(label='count')
     plt.xlim(sfrsdmin, sfrsdmax)
     plt.ylim(1, 3)
-    #plt.savefig(f'paper_figures/paper_ne_vs_sfrsd_total_{sample}.png', dpi=PLOT_DPI)
+    if PLOT_SAVE:
+        plt.savefig(f'paper_figures/paper_ne_vs_sfrsd_total_{sample}.png', dpi=PLOT_DPI)
     plt.show()
-
-
-
-
 
 
 
@@ -1701,21 +1930,31 @@ def generate_all_plots():
     plot_bpt_ne_color(sample_mask=HI_Z_MASK)
     bpt_ks_tests()
 
+    # Plot metallicity properties
+    metallicity(sample_mask=LO_Z_MASK)
+    metallicity(sample_mask=HI_Z_MASK)
+
 
 def generate_chosen_plots():
     #metallicity(sample_mask=LO_Z_MASK)
     #metallicity(sample_mask=HI_Z_MASK)
-    plot_sfr_ms(sample_mask=LO_Z_MASK)
-    plot_sfr_ms(sample_mask=HI_Z_MASK)
+    #plot_sfr_ms(sample_mask=LO_Z_MASK)
+    #plot_sfr_ms(sample_mask=HI_Z_MASK)
     #plot_ne_distribution(sample_mask=LO_Z_MASK)
     #plot_ne_distribution(sample_mask=HI_Z_MASK)
+    #plot_bpt_ne_color(sample_mask=LO_Z_MASK)
+    #plot_bpt_ne_color(sample_mask=HI_Z_MASK)
+    #bpt_ks_tests()
+    bpt_ks_test_pt_2()
 
     pass
 
 
 def main():
     global PLOT_DPI
+    global PLOT_SAVE
     PLOT_DPI = 500
+    PLOT_SAVE = True
 
     #generate_all_plots()
 
