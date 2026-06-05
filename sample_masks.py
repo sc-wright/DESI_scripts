@@ -413,7 +413,15 @@ def redshift_complete_mask():
     hi_z_bin = (mass > mass_hi_10) & (sfr > sfr_hi_10) & (redshift < z90) & BGS_SNR_MASK
     lo_z_bin = (mass > mass_lo_10) & (sfr > sfr_lo_10) & (redshift < z50) & BGS_SNR_MASK
 
-    return lo_z_bin, hi_z_bin, z50, z90, mass_lo_10, mass_hi_10, sfr_lo_10, sfr_hi_10
+    medz50 = np.median(redshift[lo_z_bin])
+    medz90 = np.median(redshift[hi_z_bin])
+
+    print(f"Median lo-z mass:{np.median(mass[lo_z_bin])}")
+    print(f"Median hi-z mass:{np.median(mass[hi_z_bin])}")
+    print(f"Median lo-z sfr:{np.median(sfr[lo_z_bin])}")
+    print(f"Median hi-z sfr:{np.median(sfr[hi_z_bin])}")
+
+    return lo_z_bin, hi_z_bin, z50, z90, medz50, medz90, mass_lo_10, mass_hi_10, sfr_lo_10, sfr_hi_10
 
 
 def get_galaxy_type_mask(sample_mask=BGS_MASK):
@@ -465,8 +473,10 @@ global M50
 global M90
 global SFR50
 global SFR90
+global MEDZ50
+global MEDZ90
 
-LO_Z_MASK, HI_Z_MASK, Z50, Z90, M50, M90, SFR50, SFR90 = redshift_complete_mask()
+LO_Z_MASK, HI_Z_MASK, Z50, Z90, MEDZ50, MEDZ90, M50, M90, SFR50, SFR90 = redshift_complete_mask()
 
 bgs_count = sum(np.array(BGS_MASK))
 snr_count = sum(np.array(BGS_SNR_MASK))
@@ -482,8 +492,8 @@ all_count = sum(np.array(np.logical_or(np.array(LO_Z_MASK), np.array(HI_Z_MASK))
 #print(sum(np.array(np.logical_or(np.array(LO_Z_MASK), np.array(HI_Z_MASK)))))
 
 if __name__ == '__main__':
-    print(f'low-z:\ncount:\t\t{lo_z_count}\nmax z:\t\t{Z50:.3f}\nmin mass:\t{M50:.3f}\nmin sfr:\t{SFR50:.3f}')
-    print(f'all-z:\ncount:\t\t{hi_z_count}\nmax z:\t\t{Z90:.3f}\nmin mass:\t{M90:.3f}\nmin sfr:\t{SFR90:.3f}')
+    print(f'low-z:\ncount:\t\t{lo_z_count}\nmax z:\t\t{Z50:.3f}\nmed z:\t\t{MEDZ50}\nmin mass:\t{M50:.3f}\nmin sfr:\t{SFR50:.3f}')
+    print(f'all-z:\ncount:\t\t{hi_z_count}\nmax z:\t\t{Z90:.3f}\nmed z:\t\t{MEDZ90}\nmin mass:\t{M90:.3f}\nmin sfr:\t{SFR90:.3f}')
 
 
 def spot_checking_ne():

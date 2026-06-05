@@ -7,7 +7,7 @@ from sample_masks import (BGS_MASK, CAT_SFR_MASK, CAT_MASS_MASK,
                           BGS_SFR_MASK, BGS_MASS_MASK,
                           BGS_SNR_MASK, LO_Z_MASK, HI_Z_MASK,
                           Z50, Z90, M50, M90, SFR50, SFR90)
-from sample_masks import bgs_ne_snr_cut
+from sample_masks import get_galaxy_type_mask
 
 
 
@@ -124,35 +124,38 @@ def bin_sfrsd_ne_mass_data(mass, sfrsd, ne, mass_edges, sfrsd_edges):
             np.array(means), np.array(errs), np.array(counts))
 
 
-def sfrsd_ne_mass_model_plotting(sample_mask=BGS_SNR_MASK, q=7.5):
+def sfrsd_ne_mass_model_plotting(sample_mask=BGS_SNR_MASK, q=7.5, mass_divider=10.25):
 
     mass = CC.catalog['MSTAR_CIGALE'][BGS_MASK]
     sfr_sd = CC.catalog['SFR_SD'][BGS_MASK]
+    sfr = CC.catalog['SFR_HALPHA'][BGS_MASK]
     z = CC.catalog['Z'][BGS_MASK]
     #ne, _ = bgs_ne_snr_cut()  # these are both bgs length
     ne = CC.catalog[f'NE_OII_{q}'][BGS_MASK]
+    _, agn_mask, _, _ = get_galaxy_type_mask(sample_mask=BGS_MASK)
 
     if sample_mask is BGS_SNR_MASK:
         sample = 1
+        sample_mask = np.array(BGS_SNR_MASK)# & ~agn_mask)
     elif sample_mask is LO_Z_MASK:
         sample = 2
-        sample_mask = np.array((BGS_SNR_MASK) & (mass >= M50) & (z <= Z50))
+        sample_mask = np.array((BGS_SNR_MASK) & (mass >= M50) & (z <= Z50) & (sfr >= SFR50))# & ~agn_mask)
         zmax = Z50
     elif sample_mask is HI_Z_MASK:
         sample = 3
-        sample_mask = np.array((BGS_SNR_MASK) & (mass >= M90) & (z <= Z90))
+        sample_mask = np.array((BGS_SNR_MASK) & (mass >= M90) & (z <= Z90) & (sfr >= SFR50))# & ~agn_mask)
         zmax = Z90
 
     mass = mass[sample_mask]
     sfrsd = sfr_sd[sample_mask]
     ne = ne[sample_mask]
 
-    fs = 20
+    fs = 18
 
-    mass_bin = 0.5
     sfrsd_bin = 0.25
-    mass_min = 9.0
-    mass_max = 11.5
+    mass_bin = 4
+    mass_min = mass_divider - mass_bin
+    mass_max = mass_divider + mass_bin
 
     mass_edges = np.arange(mass_min, mass_max + mass_bin, mass_bin)  # 0.5 dex bins
     #print(len(mass_edges))
@@ -179,7 +182,8 @@ def sfrsd_ne_mass_model_plotting(sample_mask=BGS_SNR_MASK, q=7.5):
     residuals = ne - y_pred
 
     # Define colors for bins
-    colors = plt.cm.winter(np.linspace(0, 1, 5))#len(mass_edges) - 1))
+    #colors = plt.cm.winter(np.linspace(0, 1, 2))#len(mass_edges) - 1))
+    colors = ['m', 'g']
 
     fig, ax = plt.subplots(figsize=(6, 6))
 
@@ -201,7 +205,8 @@ def sfrsd_ne_mass_model_plotting(sample_mask=BGS_SNR_MASK, q=7.5):
         # Plot good points with errorbars
         ax.errorbar(xvals[good], yvals[good], yerr=yerrs[good],
                     fmt='o', color=colors[i], ecolor=colors[i],
-                    elinewidth=1, capsize=0, label=f"{mass_edges[i]}–{mass_edges[i + 1]}")
+                    elinewidth=1, capsize=0, label=[fr'$M_\star<{mass_divider}$', fr'$M_\star\geq{mass_divider}$'][i])
+        # This label is a hacky solution that won't work for more than 2 bins, but its ok for now.
 
         # Plot bad points as open circles
         ax.plot(xvals[bad], yvals[bad], 'o',
@@ -221,23 +226,56 @@ def sfrsd_ne_mass_model_plotting(sample_mask=BGS_SNR_MASK, q=7.5):
                     #label=f"{mass_edges[i]}–{mass_edges[i + 1]}")
             pass
 
-    ax.set_xlabel(r"$\log \, \Sigma_{\rm SFR}/M_\odot/yr/kpc^2$", fontsize=fs)
-    ax.set_ylabel(r"$\log \, n_e / cm^{3}$", fontsize=fs)
-    ax.legend(title=r"$\log{M_\star}$ bins", loc="lower right")
+    ax.set_xlabel(r"$\log \Sigma_{SFR}~[M_\odot~\mathrm{yr}^{-1}~\mathrm{kpc}^{-2}]$", fontsize=fs)
+    ax.set_ylabel(r"$\log n_e~[\mathrm{cm}^{-3}]$", fontsize=fs)
+    #ax.legend(title=r"$\log{M_\star}~\mathrm{bins}$", loc="lower right")
+    ax.legend(loc="lower right")
     if sample == 2:
         tit = "low-z sample"
+        ax.text(0.02, 0.98, f'low-z',
+                horizontalalignment='left',
+                verticalalignment='top',
+                transform=ax.transAxes, fontsize=fs - 4,
+                bbox=dict(
+                    facecolor='white',
+                    alpha=0.5,
+                    edgecolor='none',
+                    boxstyle="round,pad=0.3,rounding_size=.3")
+                )
     elif sample == 3:
         tit = "all-z sample"
+        ax.text(0.02, 0.98, f'all-z',
+                horizontalalignment='left',
+                verticalalignment='top',
+                transform=ax.transAxes, fontsize=fs - 4,
+                bbox=dict(
+                    facecolor='white',
+                    alpha=0.5,
+                    edgecolor='none',
+                    boxstyle="round,pad=0.3,rounding_size=.3")
+                )
     elif sample == 1:
         tit = "all galaxies"
+        ax.text(0.02, 0.98, f'all galaxies',
+                horizontalalignment='left',
+                verticalalignment='top',
+                transform=ax.transAxes, fontsize=fs - 4,
+                bbox=dict(
+                    facecolor='white',
+                    alpha=0.5,
+                    edgecolor='none',
+                    boxstyle="round,pad=0.3,rounding_size=.3")
+                )
     else:
         tit = ""
-    plt.title(tit)
+    #plt.title(tit)
     plt.xlim(-2.1, 0.1)
-    plt.ylim(1.78, 2.63)
+    plt.ylim(1.78, 2.45)
+    plt.tight_layout()
     plt.savefig(f'paper_figures/paper_sfrsd_ne_mass_fits_{sample}.png', dpi=PLOT_DPI)
     plt.show()
 
+    """
     # Plot residuals
     plt.figure(figsize=(6, 4))
     plt.scatter(y_pred, residuals, s=5, alpha=0.5)
@@ -245,8 +283,9 @@ def sfrsd_ne_mass_model_plotting(sample_mask=BGS_SNR_MASK, q=7.5):
     plt.xlabel("Predicted $\log{n_e}$")
     plt.ylabel("Residuals (observed - predicted)")
     plt.title(f"Residuals vs predicted {tit}")
-    plt.savefig(f'paper_figures/paper_sfrsd_ne_mass_residual1_{sample}.png', dpi=PLOT_DPI)
-    plt.show()
+    #plt.savefig(f'paper_figures/paper_sfrsd_ne_mass_residual1_{sample}.png', dpi=PLOT_DPI)
+    #plt.show()
+    plt.clf()
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
@@ -261,9 +300,196 @@ def sfrsd_ne_mass_model_plotting(sample_mask=BGS_SNR_MASK, q=7.5):
     axes[1].set_ylabel("Residuals")
 
     plt.suptitle(f"Residuals vs predictors {tit}")
-    plt.savefig(f'paper_figures/paper_sfrsd_ne_mass_residual2_{sample}.png', dpi=PLOT_DPI)
+    #plt.savefig(f'paper_figures/paper_sfrsd_ne_mass_residual2_{sample}.png', dpi=PLOT_DPI)
+    #plt.show()
+    plt.clf()
+    """
 
+
+def sfr_ne_mass_model_plotting(sample_mask=BGS_SNR_MASK, q=7.5, mass_divider=10.25):
+
+    mass = CC.catalog['MSTAR_CIGALE'][BGS_MASK]
+    sfr_all = CC.catalog['SFR_HALPHA'][BGS_MASK]
+    z = CC.catalog['Z'][BGS_MASK]
+    #ne, _ = bgs_ne_snr_cut()  # these are both bgs length
+    ne = CC.catalog[f'NE_OII_{q}'][BGS_MASK]
+    _, agn_mask, _, _ = get_galaxy_type_mask(sample_mask=BGS_MASK)
+
+    if sample_mask is BGS_SNR_MASK:
+        sample = 1
+        sample_mask = np.array(BGS_SNR_MASK)# & ~agn_mask)
+    elif sample_mask is LO_Z_MASK:
+        sample = 2
+        sample_mask = np.array((BGS_SNR_MASK) & (mass >= M50) & (z <= Z50))# & ~agn_mask)
+        zmax = Z50
+    elif sample_mask is HI_Z_MASK:
+        sample = 3
+        sample_mask = np.array((BGS_SNR_MASK) & (mass >= M90) & (z <= Z90))# & ~agn_mask)
+        zmax = Z90
+
+    mass = mass[sample_mask]
+    sfr = sfr_all[sample_mask]
+    ne = ne[sample_mask]
+
+    fs = 18
+
+    mass_bin = 4
+    mass_min = mass_divider - mass_bin
+    mass_max = mass_divider + mass_bin
+
+    print(f'mass_bin:\t\t{mass_bin}')
+    print(f'mass_min:\t\t{mass_min}')
+    print(f'mass_max:\t\t{mass_max}')
+
+    sfr_bin = 0.4
+    mass_edges = np.arange(mass_min, mass_max + mass_bin, mass_bin)  # 0.5 dex bins
+    #print(len(mass_edges))
+    sfr_edges = np.arange(-1.5, 2.5 + sfr_bin, sfr_bin)  # 0.25 dex bins
+
+    # Set plot values using bin_data_full function
+    centers_m, centers_sfr, medians, errs, counts = bin_sfrsd_ne_mass_data(
+        mass, sfr, ne, mass_edges, sfr_edges
+    )
+
+    # Print out bins if desired
+    #for m, s, n, c in zip(centers_m, centers_sfr, means, counts):
+    #    print(f"Mass bin center={m:.2f}, SFR bin center={s:.2f}, "
+    #          f"ne={n:.3f}, count={c}")
+    #for m, s, n, c in zip(centers_m, centers_sfr, medians, counts):
+    #    print(f"logM={m:.2f}, logSFRsd={s:.2f}, count={c}, ne={n}")
+
+    coeffs, cov = sfrsd_ne_mass_model_fitting(mass, sfr, ne, quiet=True)
+
+    # Predicted values at each data point
+    y_pred = predict_ne(mass, sfr, coeffs)
+
+    # Residuals
+    residuals = ne - y_pred
+
+    # Define colors for bins
+    #colors = plt.cm.winter(np.linspace(0, 1, 2))#len(mass_edges) - 1))
+    colors = ['m', 'g']
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+
+    for i in range(len(mass_edges) - 1):
+        m_mid = 0.5 * (mass_edges[i] + mass_edges[i + 1])
+        in_bin = np.isclose(centers_m, m_mid)  # select only this bin’s data
+
+        # Extract data for this bin
+        xvals = centers_sfr[in_bin] + 0.01 * (i - (len(mass_edges) - 1) / 2)
+        yvals = medians[in_bin]
+        yerrs = errs[in_bin]
+        cts = counts[in_bin]
+        #print(cts)
+
+        # Separate good/bad inside this bin
+        good = cts >= 10
+        bad = cts < 10
+
+        # Plot good points with errorbars
+        ax.errorbar(xvals[good], yvals[good], yerr=yerrs[good],
+                    fmt='o', color=colors[i], ecolor=colors[i],
+                    elinewidth=1, capsize=0, label=[fr'$M_\star<{mass_divider}$', fr'$M_\star\geq{mass_divider}$'][i])
+        # This label is a hacky solution that won't work for more than 2 bins, but its ok for now.
+
+        # Plot bad points as open circles
+        ax.plot(xvals[bad], yvals[bad], 'o',
+                mfc='none', mec=colors[i], mew=1)
+
+        # Plot model curve - old version
+        #sfr_grid = np.linspace(sfrsd_edges[0], sfrsd_edges[-1], 100)
+        #model_curve = predict_ne(m_mid, sfr_grid, coeffs)
+        #ax.plot(sfr_grid, model_curve, color=colors[i],
+        #        label=f"{mass_edges[i]}–{mass_edges[i + 1]}")
+
+        # Plot model curve
+        sfr_grid = np.linspace(sfr_edges[0], sfr_edges[-1], 100)
+        model_curve = predict_ne(m_mid, sfr_grid, coeffs)  # coeffs now has 8 parameters
+        if sum(cts) > 9:
+            #ax.plot(sfr_grid, model_curve, color=colors[i])#,
+                    #label=f"{mass_edges[i]}–{mass_edges[i + 1]}")
+            pass
+
+    ax.set_xlabel(r"$\log SFR~[M_\odot~\mathrm{yr}^{-1}]$", fontsize=fs)
+    ax.set_ylabel(r"$\log n_e~[\mathrm{cm}^{-3}]$", fontsize=fs)
+    #ax.legend(title=r"$\log{M_\star}~\mathrm{bins}$", loc="lower right")
+    ax.legend(loc="lower right")
+    if sample == 2:
+        tit = "low-z sample"
+        ax.text(0.02, 0.98, f'low-z',
+                horizontalalignment='left',
+                verticalalignment='top',
+                transform=ax.transAxes, fontsize=fs - 4,
+                bbox=dict(
+                    facecolor='white',
+                    alpha=0.5,
+                    edgecolor='none',
+                    boxstyle="round,pad=0.3,rounding_size=.3")
+                )
+        plt.vlines(SFR50, ymin=0, ymax=3, colors='b')
+    elif sample == 3:
+        tit = "all-z sample"
+        ax.text(0.02, 0.98, f'all-z',
+                horizontalalignment='left',
+                verticalalignment='top',
+                transform=ax.transAxes, fontsize=fs - 4,
+                bbox=dict(
+                    facecolor='white',
+                    alpha=0.5,
+                    edgecolor='none',
+                    boxstyle="round,pad=0.3,rounding_size=.3")
+                )
+        plt.vlines(SFR90, ymin=0, ymax=3, colors='r')
+    elif sample == 1:
+        tit = "all galaxies"
+        ax.text(0.02, 0.98, f'all galaxies',
+                horizontalalignment='left',
+                verticalalignment='top',
+                transform=ax.transAxes, fontsize=fs - 4,
+                bbox=dict(
+                    facecolor='white',
+                    alpha=0.5,
+                    edgecolor='none',
+                    boxstyle="round,pad=0.3,rounding_size=.3")
+                )
+    else:
+        tit = ""
+    #plt.title(tit, fontsize=fs)
+    plt.xlim(-1.5, 2.5)
+    plt.ylim(1.78, 2.63)
+    plt.tight_layout()
+    plt.savefig(f'paper_figures/paper_sfr_ne_mass_fits_{sample}.png', dpi=PLOT_DPI)
     plt.show()
+    """
+    # Plot residuals
+    plt.figure(figsize=(6, 4))
+    plt.scatter(y_pred, residuals, s=5, alpha=0.5)
+    plt.axhline(0, color="k", lw=1)
+    plt.xlabel("Predicted $\log{n_e}$")
+    plt.ylabel("Residuals (observed - predicted)")
+    plt.title(f"Residuals vs predicted {tit}")
+    #plt.savefig(f'paper_figures/paper_sfr_ne_mass_residual1_{sample}.png', dpi=PLOT_DPI)
+    #plt.show()
+    plt.clf()
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+    axes[0].scatter(mass, residuals, s=5, alpha=0.5)
+    axes[0].axhline(0, color="k", lw=1)
+    axes[0].set_xlabel("$\log{M_\star}$")
+    axes[0].set_ylabel("Residuals")
+
+    axes[1].scatter(sfrsd, residuals, s=5, alpha=0.5)
+    axes[1].axhline(0, color="k", lw=1)
+    axes[1].set_xlabel("$\log{\Sigma_{SFR}}$")
+    axes[1].set_ylabel("Residuals")
+
+    plt.suptitle(f"Residuals vs predictors {tit}")
+    #plt.savefig(f'paper_figures/paper_sfr_ne_mass_residual2_{sample}.png', dpi=PLOT_DPI)
+    #plt.show()
+    #plt.clf()
+    """
 
 def fit_to_binned_data(sample_mask=BGS_SNR_MASK, q=7.5):
 
@@ -419,8 +645,11 @@ def fit_to_binned_data(sample_mask=BGS_SNR_MASK, q=7.5):
 
 
 if __name__ == "__main__":
-    PLOT_DPI = 300
-    sfrsd_ne_mass_model_plotting(LO_Z_MASK)
-    sfrsd_ne_mass_model_plotting(HI_Z_MASK)
+    PLOT_DPI = 100
+    mass_div = 10
+    sfrsd_ne_mass_model_plotting(sample_mask=LO_Z_MASK, mass_divider=mass_div)
+    sfrsd_ne_mass_model_plotting(sample_mask=HI_Z_MASK, mass_divider=mass_div)
+    sfr_ne_mass_model_plotting(sample_mask=LO_Z_MASK, mass_divider=mass_div)
+    sfr_ne_mass_model_plotting(sample_mask=HI_Z_MASK, mass_divider=mass_div)
     #fit_to_binned_data(LO_Z_MASK)
     #sfrsd_ne_mass_model_plotting(BGS_SNR_MASK)
