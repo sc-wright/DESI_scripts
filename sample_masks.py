@@ -494,6 +494,10 @@ all_count = sum(np.array(np.logical_or(np.array(LO_Z_MASK), np.array(HI_Z_MASK))
 if __name__ == '__main__':
     print(f'low-z:\ncount:\t\t{lo_z_count}\nmax z:\t\t{Z50:.3f}\nmed z:\t\t{MEDZ50}\nmin mass:\t{M50:.3f}\nmin sfr:\t{SFR50:.3f}')
     print(f'all-z:\ncount:\t\t{hi_z_count}\nmax z:\t\t{Z90:.3f}\nmed z:\t\t{MEDZ90}\nmin mass:\t{M90:.3f}\nmin sfr:\t{SFR90:.3f}')
+    apcor = CC.catalog['APERTURE_CORRECTION'][BGS_MASK]
+    print(f"Aperture corrections:")
+    print("Low-z:", np.median(apcor[LO_Z_MASK]), np.average(apcor[LO_Z_MASK]), np.max(apcor[LO_Z_MASK]))
+    print("All-z:", np.median(apcor[HI_Z_MASK]), np.average(apcor[HI_Z_MASK]), np.max(apcor[HI_Z_MASK]))
 
 
 def spot_checking_ne():

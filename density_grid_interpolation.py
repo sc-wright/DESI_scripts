@@ -6,6 +6,9 @@ from astropy.io import ascii
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from scipy.optimize import brentq
+plt.rcParams.update({
+    'text.usetex': True
+})
 
 def read_density_table(filename):
     """
@@ -62,23 +65,76 @@ def read_density_table(filename):
         np.array(sii)
     )
 
-
 def ne_model(R, a, b, c):
     return np.log10((c * R - a * b) / (a - R))
+
+def ne_model_global(X,
+                    a0, a1,
+                    b0, b1,
+                    c0, c1):
+
+    R, Z = X
+
+    a = a0 + a1 * Z
+    b = b0 + b1 * Z
+    c = c0 + c1 * Z
+
+    return np.log10((c * R - a * b) / (a - R))
+
+def fit_ne_vs_ratio_by_metallicity_simultaneous(
+    logne, logq, logOH, ratio,
+    logq_fixed):
+
+    # Select rows at fixed ionization parameter
+    m = logq == logq_fixed
+    if not np.any(m):
+        raise ValueError(f"No rows found for logq = {logq_fixed}")
+
+    R = ratio[m]
+    Z = logOH[m]
+    ne = logne[m]
+
+    Z_vals = np.unique(Z)
+
+    p0_global = (
+        0.35, 0.003,  # a0,a1
+        5000, -300,  # b0,b1
+        1200, -70  # c0,c1
+    )
+
+    popt, pcov = curve_fit(
+        ne_model_global,
+        (R, Z),
+        ne,
+        p0=p0_global,
+        maxfev=100000
+    )
+
+    fit_params = {}
+
+    for Zval in np.unique(Z):
+        a = popt[0] + popt[1] * Zval
+        b = popt[2] + popt[3] * Zval
+        c = popt[4] + popt[5] * Zval
+
+        fit_params[Zval] = np.array([a, b, c])
+
+    return Z_vals, fit_params
 
 
 def fit_ne_vs_ratio_by_metallicity(
     logne, logq, logOH, ratio,
     logq_fixed,
-    p0=(0.3771, 2468, 638.4)   # initial guesses for OII from Sanders+16. If using SII, replace these with (0.4315, 2107, 627.1)
+    p0=(0.3771, 2468, 635)
+        # initial guesses are tweaked from Sanders+16.
+        # If using SII, replace these with (0.4315, 2107, 627.1) and then tweak further
 ):
-    """
-    Fit ne(R) at fixed log(q) for each metallicity.
+    
+    #Fit ne(R) at fixed log(q) for each metallicity.
 
-    Returns:
-        Z_vals : sorted array of metallicities
-        fit_params : dict mapping Z -> (a, b, c)
-    """
+    #Returns:
+    #    Z_vals : sorted array of metallicities
+    #    fit_params : dict mapping Z -> (a, b, c)
 
     # Select rows at fixed ionization parameter
     m = logq == logq_fixed
@@ -110,15 +166,47 @@ def fit_ne_vs_ratio_by_metallicity(
             R,
             ne,
             p0=p0,
-            maxfev=10000
+            maxfev=100000
         )
+
+        #print(Z)
+        #print(popt)
+        #print(np.sqrt(np.diag(pcov)))
 
         fit_params[Z] = popt  # (a, b, c)
 
-    #plt.legend()
-    #plt.show()
-
     return Z_vals, fit_params
+
+    ### NEW SMOOTHING ADDITION BELOW - this is too smooth, makes everything equally spaced
+
+    # Extract fitted coefficients
+    a_vals = np.array([fit_params[Z][0] for Z in Z_vals])
+    b_vals = np.array([fit_params[Z][1] for Z in Z_vals])
+    c_vals = np.array([fit_params[Z][2] for Z in Z_vals])
+
+    # Optional: exclude failed fits
+    good = (
+            np.isfinite(a_vals) &
+            np.isfinite(b_vals) &
+            np.isfinite(c_vals)
+    )
+
+    # Fit smooth trends with metallicity
+    pa = np.polyfit(Z_vals[good], a_vals[good], 1)
+    pb = np.polyfit(Z_vals[good], b_vals[good], 1)
+    pc = np.polyfit(Z_vals[good], c_vals[good], 1)
+
+    # Replace fitted parameters with smoothed values
+    fit_params_smooth = {}
+
+    for Z in Z_vals:
+        a = np.polyval(pa, Z)
+        b = np.polyval(pb, Z)
+        c = np.polyval(pc, Z)
+
+        fit_params_smooth[Z] = np.array([a, b, c])
+
+    return Z_vals, fit_params_smooth
 
 
 def plot_fits():
@@ -132,17 +220,24 @@ def plot_fits():
         logne, logq, logOH, ratio,
         logq_fixed=7.5
     )
-    for Z in Z_vals:
-        print(Z, fit_params[Z])
-
+    #for Z in Z_vals:
+    #    print(Z, fit_params[Z])
+    fs = 18
+    smfs = fs-4
+    colors = ['b', 'g', 'r', 'c', 'm']
     y = np.linspace(0.38369, 1.4524, 100)
-    for Z in Z_vals:
+    fig = plt.figure()
+    for i, Z in enumerate(Z_vals):
        #print(Z, fit_params[Z])
         x = ne_model(y, *fit_params[Z])
-        plt.plot(x, y, label=Z)
-    plt.legend()
+        plt.plot(x, y, label=Z, color=colors[i])
+    plt.xlim(0.5,5)
+    plt.xlabel(r"$\log{n_e}~[\mathrm{cm}^{-3}]$", fontsize=fs)
+    plt.ylabel(r"$F_{\lambda3729}/F_{\lambda3726}$", fontsize=fs)
+    plt.legend(title=r'$12 + \log(\mathrm{O}/\mathrm{H})$', fontsize=smfs)
+    plt.tight_layout()
+    plt.savefig('paper_figures/density_grid_interpolation_fits.png', dpi=DPI)
     plt.show()
-
 
 def infer_logne_from_fits(
     logOH,
@@ -323,31 +418,17 @@ def example_density_interp():
     print(logne_inferred)
 
 
-if __name__ == "__main__":
-    example_density_interp()
-
-
-
-
-
-
-
-
-
-
-
-
-
+if __name__ == '__main__':
+    DPI = 300
+    plot_fits()
 
 
 
 
 
 #############################################################################################
-########################### OLD WORK, BEFORE ADDING PRESSURE AXIS ###########################
+########################### OLD WORK, BEFORE ADDING FITTING #################################
 #############################################################################################
-
-
 
 
 def ionization_param(oii, oiii):
@@ -568,7 +649,7 @@ def plot_all_curves():
 
     plt.ylabel('[O II] 3729/3726 line ratio', fontsize=20)
     plt.xlabel(r'$log(n_e/cm^{3})$', fontsize=20)
-    plt.title(f'Density-sensitive [O II] ratio', fontsize=20)
+    plt.title(f'Metallicity and IP-sensitive [O II] ratio calibration', fontsize=20)
     # --- proxy handles for log(U) (linestyle only)
     style_handles = [
         Line2D([0], [0], color='k', lw=2, linestyle=ls)
@@ -609,10 +690,10 @@ def plot_all_curves():
     plt.show()
     return 0
 
-#logne_vals, logOH_vals, logU_vals, ratio_grid, interp_ratio = density_interpolation_grid()
+logne_vals, logOH_vals, logU_vals, ratio_grid, interp_ratio = density_interpolation_grid()
 
 
-#if __name__ == '__main__':
+if __name__ == '__main__':
     #for logU in np.arange(6.5, 8.75, 0.25):
     #    plot_grids(logU_plot=logU)
-    #plot_all_curves()
+    plot_all_curves()

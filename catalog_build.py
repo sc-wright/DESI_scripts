@@ -25,7 +25,6 @@ from spectrum_plot import Spectrum
 
 import time
 
-
 class CustomCatalog:
     def __init__(self):
         self.ccat_dir = os.path.expanduser('~') + '/Documents/school/research/customcatalog'
@@ -66,17 +65,19 @@ class CustomCatalog:
         try:
             # Modify table in memory
             # This is where you put any code that adds columns
-            oii_6, sii_6 = self.add_p_q_constrained_electron_density(logq_use=6.5)
-            oii_7, sii_7 = self.add_p_q_constrained_electron_density(logq_use=7.5)
-            oii_8, sii_8 = self.add_p_q_constrained_electron_density(logq_use=8.5)
-            self.catalog['NE_OII_6.5'] = oii_6
-            self.catalog['NE_OII_7.5'] = oii_7
-            self.catalog['NE_OII_8.5'] = oii_8
-            self.catalog['NE_SII_6.5'] = sii_6
-            self.catalog['NE_SII_7.5'] = sii_7
-            self.catalog['NE_SII_8.5'] = sii_8
+            #oii_6, sii_6 = self.add_p_q_constrained_electron_density(logq_use=6.5)
+            #oii_7, sii_7 = self.add_p_q_constrained_electron_density(logq_use=7.5)
+            #oii_8, sii_8 = self.add_p_q_constrained_electron_density(logq_use=8.5)
+            #self.catalog['NE_OII_6.5'] = oii_6
+            #self.catalog['NE_OII_7.5'] = oii_7
+            #self.catalog['NE_OII_8.5'] = oii_8
+            #self.catalog['NE_SII_6.5'] = sii_6
+            #self.catalog['NE_SII_7.5'] = sii_7
+            #self.catalog['NE_SII_8.5'] = sii_8
             #self.catalog['METALLICITY_R23'] = self.add_r23_metallicity()
 
+            apcor = self.aperture_correct_ha()
+            self.catalog['APERTURE_CORRECTION'] = apcor[1]
 
             # Write to a temporary file first, then atomically replace original path
             # (prevents partial/corrupt file at the final location)
@@ -139,7 +140,9 @@ class CustomCatalog:
         self.catalog['A_HALPHA'] = sfr_ebv[2]
         print("performing aperture correction...")
         # Then do aperture correction
-        self.catalog['HALPHA_BALMER_APERTURE'] = self.aperture_correct_ha()
+        apcor = self.aperture_correct_ha()
+        self.catalog['HALPHA_BALMER_APERTURE'] = apcor[0]
+        self.catalog['APERTURE_CORRECTION'] = apcor[1]
         print("calculating sfr...")
         # Now calculate SFR using Balmer- and aperture-corrected Halpha. This is what we use for SFR
         self.catalog['SFR_HALPHA'] = self.add_full_corrected_sfr()
@@ -566,6 +569,9 @@ class CustomCatalog:
         # Read in table
         logne, logq, logOH, oii, sii = dgi.read_density_table("apjab16edt2_mrt.txt")
 
+        # We can check how the system would behave if the metallicities were in fact on the Tremonti curve:
+        #logOH = logOH - 0.15
+
         # Fit once per ion for a given ionization parameter
         oii_Z_vals, oii_fit_params = dgi.fit_ne_vs_ratio_by_metallicity(
             logne, logq, logOH, oii,
@@ -695,6 +701,7 @@ class CustomCatalog:
         small_radius_flag = np.full(len(r_ap_fluxes), False)
 
         rad_ind = self.get_radius_indices(bgs_mask)
+        #print(rad_ind)
 
         # loop over all the r and g fluxes
         for i in range(len(r_ap_fluxes)):
@@ -756,8 +763,9 @@ class CustomCatalog:
 
         ha_flux = np.zeros(len(tids))
         ha_flux[bgs_mask] = ha_flux_corrected
-
-        return ha_flux
+        ha_full_length_correction_factor = np.zeros(len(tids))
+        ha_full_length_correction_factor[bgs_mask] = ha_final_correction
+        return ha_flux, ha_full_length_correction_factor
 
     def add_full_corrected_sfr(self):
 

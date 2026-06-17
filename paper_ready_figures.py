@@ -53,7 +53,7 @@ def histogram_plots(q=7.5):
     fig, axes = plt.subplots(6, 2, figsize=(10, 12))
 
     # Adjust the space between subplots for better readability
-    fig.subplots_adjust(hspace=0.4, wspace=0.3)
+    fig.subplots_adjust(hspace=0.5, wspace=0.3)
 
     # Store the data in a 2D list (or array)
     data = [
@@ -67,7 +67,7 @@ def histogram_plots(q=7.5):
 
     xlabels = [
         r'$z$',
-        r'$\log\,(\,M_\star\,[M_\odot]\,)$',
+        r'$\log\,(M_\star\,[M_\odot]\,)$',
         r'$\log\,(\mathrm{SFR}\,[M_\odot\,\mathrm{yr}^{-1}])$',
         r'$\log\,(\Sigma_{\mathrm{SFR}}\,[M_\odot\,\mathrm{yr}^{-1}\,\mathrm{kpc}^{-2}])$',
         r'$\log\,(n_e\,[\mathrm{cm}^{-3}])$',
@@ -92,7 +92,7 @@ def histogram_plots(q=7.5):
         0.03
     ]
 
-    fs = 16
+    fs = 18
 
     # Loop over each subplot
     for i in range(6):
@@ -109,8 +109,9 @@ def histogram_plots(q=7.5):
 
             ax.hist(current_data, bins=bin_dims, color='black', histtype='step', linestyle='-', linewidth=1.5)
 
-            print(xlabels[i])
-            print(np.median(current_data))
+            #print(xlabels[i])
+            #print(np.median(current_data))
+            ax.text(0.99, 0.99, f'median = {np.median(current_data):.2f}', fontsize=fs-3, horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes)
 
             # Set axis labels and title (adjust as needed)
             if j == 0:  # Left column for y-axis labels
@@ -134,6 +135,7 @@ def histogram_plots(q=7.5):
 
     axes[0, 0].set_title('low-$z$', fontsize=14)
     axes[0, 1].set_title('all-$z$', fontsize=14)
+    plt.tight_layout()
     plt.savefig(f'paper_figures/histograms.{FILE_TYPE}', dpi=PLOT_DPI)
     plt.show()
 
@@ -527,7 +529,7 @@ def plot_redshift_vs_mass_sfr():
 
     # Main part of figure
     sp = ax_main.hist2d(redshift, mass, bins=60, cmap="Greys", norm=mpl.colors.LogNorm())
-    ax_main.set(xlim=(0, 0.4), ylim=(7, 11.5))
+    ax_main.set(xlim=(0, 0.399), ylim=(7, 11.5))
     ax_main.set_xlabel(r"$z$", fontsize=fs)
     ax_main.set_ylabel(r"$\log M_\star~[M_\odot]$", fontsize=fs)
     ax_main.vlines(Z50, M50, 13, color='b', label=f'low-z completeness limits ({sum(np.array(LO_Z_MASK))} galaxies)')
@@ -573,7 +575,7 @@ def plot_redshift_vs_mass_sfr():
 
     # Main part of figure
     sp = ax_main.hist2d(redshift, sfr, bins=60, cmap="Greys", norm=mpl.colors.LogNorm())
-    ax_main.set(xlim=(0, 0.4), ylim=(-2, 2))
+    ax_main.set(xlim=(0, 0.399), ylim=(-2, 2))
     ax_main.set_xlabel(r"$z$", fontsize=fs)
     ax_main.set_ylabel(r'$\log SFR~[M_\odot~yr^{-1}]$', fontsize=fs)
     ax_main.vlines(Z50, SFR50, 10, color='b', label=f'low-z completeness limits ({sum(np.array(LO_Z_MASK))} galaxies)')
@@ -738,10 +740,13 @@ def plot_sfr_ms(plot=True):
                 # Our fit
                 y1 = low_z_p(x1)
                 y2 = low_z_p(x2)
+                plt.plot(x1, y1, color='white', label='_nolegend', linewidth=3.5)
                 plt.plot(x1, y1, color='k', label='our polynomial fit', linewidth=3)
-                plt.plot(xt, yt_schreiber_loz, color='tab:green', label='Schreiber+15 (at $z={:.2f}$)'.format(Z50))
+                plt.plot(xt, yt_whitaker_p2_loz, label='_nolegend', color='white', linestyle='-', linewidth=2.5)
+                plt.plot(xt, yt_whitaker_p2_loz, label='Whitaker+14 (at $z={:.2f}$)'.format(Z50), color='darkorange', linestyle='--', linewidth=2)
+                plt.plot(xt, yt_schreiber_loz, label='_nolegend', color='white', linestyle='-', linewidth=2.5)
+                plt.plot(xt, yt_schreiber_loz, label='Schreiber+15 (at $z={:.2f}$)'.format(Z50), color='deeppink', linestyle='-.', linewidth=2)
                 # plt.plot(mstar_wht, yt_whitaker_zcorr_loz, color='tab:purple', label='Whitaker+14')
-                plt.plot(xt, yt_whitaker_p2_loz, label='Whitaker+14 (at $z={:.2f}$)'.format(Z50), color='tab:purple')
             if sample == 3:
                 ax.text(0.02, 0.98, f'all-z',
                         horizontalalignment='left',
@@ -757,10 +762,13 @@ def plot_sfr_ms(plot=True):
                 # Our fit
                 y1 = all_z_p(x1)
                 y2 = all_z_p(x2)
+                plt.plot(x1, y1, color='white', label='_nolegend', linewidth=3.5)
                 plt.plot(x1, y1, color='k', label='our polynomial fit', linewidth=3)
-                plt.plot(xt, yt_schreiber_hiz, color='tab:green', label='Schreiber+15 (at $z={:.2f}$)'.format(Z90))
+                plt.plot(xt, yt_whitaker_p2_hiz, label='_nolegend', color='white', linestyle='-', linewidth=2.5)
+                plt.plot(xt, yt_whitaker_p2_hiz, label='Whitaker+14 (at $z={:.2f}$)'.format(Z90), color='darkorange', linestyle='--', linewidth=2)
+                plt.plot(xt, yt_schreiber_hiz, label='_nolegend', color='white', linestyle='-', linewidth=2.5)
+                plt.plot(xt, yt_schreiber_hiz, label='Schreiber+15 (at $z={:.2f}$)'.format(Z90), color='deeppink', linestyle='-.', linewidth=2)
                 #plt.plot(mstar_wht, yt_whitaker_zcorr_hiz, color='tab:purple', label='Whitaker+14')
-                plt.plot(xt, yt_whitaker_p2_hiz, label='Whitaker+14 (at $z={:.2f}$)'.format(Z90), color='tab:purple')
 
                 # Add grey overlay to incomplete regions and indicate complete regions
             xmin, xmax = ax.get_xlim()
@@ -1441,6 +1449,30 @@ def plot_sfrsd_vs_mass_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
         plt.savefig(f'paper_figures/sfrsd_vs_mstar_vs_iqr_{sample}.{FILE_TYPE}', dpi=PLOT_DPI)
     plt.show()
 
+def find_percentile_lines(ne, indep, min_val, max_val, percentiles, b=0.1):
+    percentiles = np.atleast_1d(percentiles)
+
+    # One list per percentile
+    ne_percentiles = [[] for _ in percentiles]
+    indep_range = []
+
+    for i in np.arange(min_val, max_val, b):
+        mask = generate_combined_mask(indep >= i, indep < i + b)
+
+        if np.any(mask):
+            p_values = np.percentile(ne[mask], percentiles)
+
+            for j, p in enumerate(p_values):
+                ne_percentiles[j].append(p)
+
+            indep_range.append(i + b * 0.5)
+
+    # Convert to arrays
+    ne_percentiles = np.asarray(ne_percentiles)
+    indep_range = np.asarray(indep_range)
+
+    return ne_percentiles, indep_range
+
 
 def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
     """
@@ -1460,11 +1492,13 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
     elif sample_mask is LO_Z_MASK:
         sample = 2
         sample_mask = BGS_SNR_MASK & (z_bgs < Z50)
+        other_sample_mask = BGS_SNR_MASK & (z_bgs < Z90)
         mlim = M50
         sfrlim = SFR50
     elif sample_mask is HI_Z_MASK:
         sample = 3
         sample_mask = BGS_SNR_MASK & (z_bgs < Z90)
+        other_sample_mask = BGS_SNR_MASK & (z_bgs < Z50)
         mlim = M90
         sfrlim = SFR90
     sample_mask = np.array(sample_mask)
@@ -1482,26 +1516,13 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
 
     # Plot ne vs mass
 
+    # Calculate percentile lines
     massmin = 7.5
     massmax = 11.5
-
-    # Calculate 25/50/75th percentiles
-    ne_75 = []
-    ne_50 = []
-    ne_25 = []
-    mrange = []
-
-    b = 0.1
-    for i in np.arange(massmin, massmax, b):
-        try:
-            p25, p50, p75 = np.percentile(ne[generate_combined_mask(mass >= i, mass < i + b)],
-                                          (25, 50, 75))
-            ne_25.append(p25)
-            ne_50.append(p50)
-            ne_75.append(p75)
-            mrange.append(i + b * 0.5)
-        except IndexError:
-            pass
+    nerange, mrange = find_percentile_lines(ne, mass, massmin, massmax, (25, 50, 75))
+    ne_25 = nerange[0]
+    ne_50 = nerange[1]
+    ne_75 = nerange[2]
 
     figdim = (6, 5)
     fig, ax = plt.subplots(figsize=figdim)
@@ -1549,6 +1570,11 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
                     edgecolor='none',
                     boxstyle="round,pad=0.3,rounding_size=.3"),
                 transform=ax.transAxes, fontsize=fs - 4)
+    if sample == 2 or sample == 3:
+        nerange, other_mrange = find_percentile_lines(np.array(ne_bgs[other_sample_mask]), np.array(mass_bgs[other_sample_mask]), massmin, massmax, 50)
+        other_ne_median = nerange[0]
+        plt.plot(other_mrange, other_ne_median, color='w', linewidth=3.5)
+        plt.plot(other_mrange, other_ne_median, color='r', linestyle='-.')
     plt.plot(mrange, ne_25, color='white', linewidth=3.5)
     plt.plot(mrange, ne_25, color=colr, linestyle='dashed')
     plt.plot(mrange, ne_50, color='white', linewidth=3.5)
@@ -1586,25 +1612,18 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
         plt.savefig(f'paper_figures/paper_ne_vs_mass_{sample}.{FILE_TYPE}', dpi=PLOT_DPI)
     plt.show()
 
+
+
+
+
     # Plot ne vs sfr
 
     sfrmin = -1.5
     sfrmax = 2.0
-
-    ne_75 = []
-    ne_50 = []
-    ne_25 = []
-    sfrrange = []
-
-    for i in np.arange(sfrmin, sfrmax, b):
-        try:
-            p25, p50, p75 = np.percentile(ne[generate_combined_mask(sfr >= i, sfr < i + b)], (25, 50, 75))
-            ne_25.append(p25)
-            ne_50.append(p50)
-            ne_75.append(p75)
-            sfrrange.append(i + b * 0.5)
-        except IndexError:
-            pass
+    nerange, sfrrange = find_percentile_lines(ne, sfr, sfrmin, sfrmax, (25, 50, 75))
+    ne_25 = nerange[0]
+    ne_50 = nerange[1]
+    ne_75 = nerange[2]
 
     fig, ax = plt.subplots(figsize=figdim)
     plt.subplots_adjust(bottom=0.12)
@@ -1649,6 +1668,11 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
                     edgecolor='none',
                     boxstyle="round,pad=0.3,rounding_size=.3"),
                 transform=ax.transAxes, fontsize=fs - 4)
+    if sample == 2 or sample == 3:
+        nerange, other_sfrrange = find_percentile_lines(np.array(ne_bgs[other_sample_mask]), np.array(sfr_bgs[other_sample_mask]), sfrmin, sfrmax, 50)
+        other_ne_median = nerange[0]
+        plt.plot(other_sfrrange, other_ne_median, color='w', linewidth=3.5)
+        plt.plot(other_sfrrange, other_ne_median, color='r', linestyle='-.')
     plt.plot(sfrrange, ne_25, color='white', linewidth=3.5)
     plt.plot(sfrrange, ne_25, color=colr, linestyle='dashed')
     plt.plot(sfrrange, ne_50, color='white', linewidth=3.5)
@@ -1691,41 +1715,37 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
     # Change mask to full mass and sfr cuts for this plot and next so we are only plotting the complete region
     if sample == 2:
         sample_mask = np.array(LO_Z_MASK)
+        other_sample_mask = np.array(HI_Z_MASK)
     elif sample == 3:
         sample_mask = np.array(HI_Z_MASK)
+        other_sample_mask = np.array(LO_Z_MASK)
 
     # Re-generate
     sfr_sd = np.array(sfr_sd_bgs[sample_mask])
+    other_sfr_sd = np.array(sfr_sd_bgs[other_sample_mask])
     ne = np.array(ne_bgs[sample_mask])
+    other_ne = np.array(ne_bgs[other_sample_mask])
     mass = np.array(mass_bgs[sample_mask])
+    other_mass = np.array(mass_bgs[other_sample_mask])
     sfr = np.array(sfr_bgs[sample_mask])
+    other_sfr = np.array(sfr_bgs[other_sample_mask])
+
+    msfit_p_lo, msfit_p_hi = plot_sfr_ms(plot=False)
+    if sample == 2:
+        msfit_p = msfit_p_lo
+        other_msfit_p = msfit_p_hi
+    elif sample == 3:
+        msfit_p = msfit_p_hi
+        other_msfit_p = msfit_p_lo
+    dist_from_ms = sfr - msfit_p(mass)
+    other_dist_from_ms = other_sfr - other_msfit_p(other_mass)
 
     sfrmin = -1
     sfrmax = 1
-
-    ne_75 = []
-    ne_50 = []
-    ne_25 = []
-    sfrrange = []
-
-    msfit_p_lo, msfit_p_hi = plot_sfr_ms(plot=False)
-
-    if sample == 2:
-        msfit_p = msfit_p_lo
-    elif sample == 3:
-        msfit_p = msfit_p_hi
-
-    dist_from_ms = sfr - msfit_p(mass)
-
-    for i in np.arange(sfrmin, sfrmax, b):
-        try:
-            p25, p50, p75 = np.percentile(ne[generate_combined_mask(dist_from_ms >= i, dist_from_ms < i + b)], (25, 50, 75))
-            ne_25.append(p25)
-            ne_50.append(p50)
-            ne_75.append(p75)
-            sfrrange.append(i + b * 0.5)
-        except IndexError:
-            pass
+    nerange, sfrrange = find_percentile_lines(ne, dist_from_ms, sfrmin, sfrmax, (25, 50, 75))
+    ne_25 = nerange[0]
+    ne_50 = nerange[1]
+    ne_75 = nerange[2]
 
     fig, ax = plt.subplots(figsize=figdim)
     plt.subplots_adjust(bottom=0.12)
@@ -1770,6 +1790,11 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
                     edgecolor='none',
                     boxstyle="round,pad=0.3,rounding_size=.3"),
                 transform=ax.transAxes, fontsize=fs - 4)
+    if sample == 2 or sample == 3:
+        nerange, other_sfrrange = find_percentile_lines(other_ne, other_dist_from_ms, sfrmin, sfrmax, 50)
+        other_ne_median = nerange[0]
+        plt.plot(other_sfrrange, other_ne_median, color='w', linewidth=3.5)
+        plt.plot(other_sfrrange, other_ne_median, color='r', linestyle='-.')
     plt.plot(sfrrange, ne_25, color='white', linewidth=3.5)
     plt.plot(sfrrange, ne_25, color=colr, linestyle='dashed')
     plt.plot(sfrrange, ne_50, color='white', linewidth=3.5)
@@ -1790,23 +1815,10 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
 
     sfrsdmin = -1.95
     sfrsdmax = -0
-
-    ne_75 = []
-    ne_50 = []
-    ne_25 = []
-    sfrsdrange = []
-
-    b = b/2
-
-    for i in np.arange(sfrsdmin, sfrsdmax, b):
-        try:
-            p25, p50, p75 = np.percentile(ne[generate_combined_mask(sfr_sd >= i, sfr_sd < i + b)], (25, 50, 75))
-            ne_25.append(p25)
-            ne_50.append(p50)
-            ne_75.append(p75)
-            sfrsdrange.append(i + b * 0.5)
-        except IndexError:
-            pass
+    nerange, sfrsdrange = find_percentile_lines(ne, sfr_sd, sfrsdmin, sfrsdmax, (25, 50, 75), b=0.05)
+    ne_25 = nerange[0]
+    ne_50 = nerange[1]
+    ne_75 = nerange[2]
 
     fig, ax = plt.subplots(figsize=figdim)
     plt.subplots_adjust(bottom=0.12)
@@ -1846,6 +1858,11 @@ def plot_mass_sfr_sfrsd_vs_ne(sample_mask=BGS_SNR_MASK, q=7.5):
                 horizontalalignment='left',
                 verticalalignment='top',
                 transform=ax.transAxes, fontsize=fs - 4)
+    if sample == 2 or sample == 3:
+        nerange, other_sfrsdrange = find_percentile_lines(other_ne, other_sfr_sd, sfrsdmin, sfrsdmax, 50, b=0.05)
+        other_ne_median = nerange[0]
+        plt.plot(other_sfrsdrange, other_ne_median, color='w', linewidth=3.5)
+        plt.plot(other_sfrsdrange, other_ne_median, color='r', linestyle='-.')
     plt.plot(sfrsdrange, ne_25, color='white', linewidth=3.5)
     plt.plot(sfrsdrange, ne_25, color=colr, linestyle='dashed')
     plt.plot(sfrsdrange, ne_50, color='white', linewidth=3.5)
@@ -2569,6 +2586,7 @@ def metallicity(sample_mask=BGS_SNR_MASK, q=7.5):
         tit = 'all-z'
 
     fs = 18
+    smfs = fs-4
 
     hii_galaxy_mask, agn_galaxy_mask, _, _ = get_galaxy_type_mask()
 
@@ -2580,12 +2598,16 @@ def metallicity(sample_mask=BGS_SNR_MASK, q=7.5):
     plt.hist2d(mass[star_forming_mass_sample_mask], metallicity[star_forming_mass_sample_mask], bins=(40, 30), norm=mpl.colors.LogNorm())
     x = np.linspace(8.5, 11.5, 100)
     f = lambda x: -1.492 + 1.847*x - 0.08026*(x**2)
-    #plt.plot(x, f(x), color='w', linewidth=3)
-    #plt.plot(x, f(x), label='Tremonti+04', color='k')
-    plt.vlines(mlim, 0, 20, color=clr, label='Lower mass limit')
+    plt.plot(x, f(x), color='w', linewidth=3)
+    plt.plot(x, f(x), label='Tremonti+04', color='pink', linewidth=2.5)
+    plt.legend()
+    #plt.vlines(mlim, 0, 20, color=clr)
     plt.xlim(M50, 11.5)
     plt.ylim(8, 9)
-    plt.colorbar()
+    cbar = plt.colorbar()
+    cbar.set_label(label='count', fontsize=smfs)
+    ax.tick_params(axis='x', labelsize=smfs)
+    ax.tick_params(axis='y', labelsize=smfs)
 
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
@@ -2609,8 +2631,7 @@ def metallicity(sample_mask=BGS_SNR_MASK, q=7.5):
 
     plt.xlabel(r'$\log M_\star~[M_\odot]$', fontsize=fs)
     plt.ylabel(r'$12 + \log{O/H}$', fontsize=fs)
-    plt.title(tit)
-    #plt.legend()
+    plt.title(tit, fontsize=fs)
     plt.tight_layout()
     if PLOT_SAVE:
         plt.savefig(f'paper_figures/mass-metallicity_relation_{sample}.{FILE_TYPE}', dpi=PLOT_DPI)
@@ -2642,6 +2663,7 @@ def metallicity(sample_mask=BGS_SNR_MASK, q=7.5):
         except IndexError:
             pass
 
+    fig, ax = plt.subplots()
     spearcorr = spearmanr(metallicity[star_forming_sample_mask], ne[star_forming_sample_mask])
     plt.hist2d(metallicity[star_forming_sample_mask], ne[star_forming_sample_mask], bins=(25, 40), norm=mpl.colors.LogNorm(), cmap='plasma')
     xmin = 8.0
@@ -2656,11 +2678,14 @@ def metallicity(sample_mask=BGS_SNR_MASK, q=7.5):
     plt.plot(mrange, ne_75, color='b', linestyle='dashed')
     plt.xlim(xmin, xmax)
     plt.ylim(1, 3)
-    plt.colorbar(label='count')
+    cbar = plt.colorbar()
+    cbar.set_label(label='count', fontsize=smfs)
+    ax.tick_params(axis='x', labelsize=smfs)
+    ax.tick_params(axis='y', labelsize=smfs)
     plt.xlabel(r'$12 + \log{O/H}$', fontsize=fs)
     plt.ylabel(r'$\log n_e~[\mathrm{cm}^{-3}]$', fontsize=fs)
     plt.text(0.02, 0.98, f'spearman statistic: {spearcorr.statistic:.2f}\np-value: {spearcorr.pvalue:.3e}',
-             transform=plt.gca().transAxes, fontsize=fs - 6, va='top', ha='left', bbox=dict(
+             transform=plt.gca().transAxes, fontsize=smfs, va='top', ha='left', bbox=dict(
                     facecolor='white',
                     alpha=0.5,
                     edgecolor='none',
@@ -3034,15 +3059,14 @@ def generate_all_plots_for_paper():
     #plot_redshift_vs_mass_sfr()
 
     # Plot sample property histograms
-    #histogram_plots()
+    histogram_plots()
 
     # Compare SFR
     #compare_sfr(sample_mask=LO_Z_MASK)
     #compare_sfr(sample_mask=HI_Z_MASK)
 
     # Plot sfr main sequence
-    #plot_sfr_ms(sample_mask=LO_Z_MASK)
-    #plot_sfr_ms(sample_mask=HI_Z_MASK)
+    plot_sfr_ms()
 
     # Compare ne from different sources and snr
     # These won't work since we are not cutting on SNR(SII) anymore
@@ -3051,25 +3075,28 @@ def generate_all_plots_for_paper():
     #compare_ne_values(sample_mask=LO_Z_MASK)
     #compare_ne_values(sample_mask=HI_Z_MASK)
 
+    # Plot the samples
+    plot_redshift_vs_mass_sfr()
+
     # Plot redshift vs ne
-    #plot_redshift_vs_ne(sample_mask=LO_Z_MASK)
-    #plot_redshift_vs_ne(sample_mask=HI_Z_MASK)
+    plot_redshift_vs_ne(sample_mask=LO_Z_MASK)
+    plot_redshift_vs_ne(sample_mask=HI_Z_MASK)
 
     # Plot ne vs mass, sfr, sfrsd with percentile trendlines
-    #plot_mass_sfr_sfrsd_vs_ne(sample_mask=LO_Z_MASK)
-    #plot_mass_sfr_sfrsd_vs_ne(sample_mask=HI_Z_MASK)
+    plot_mass_sfr_sfrsd_vs_ne(sample_mask=LO_Z_MASK)
+    plot_mass_sfr_sfrsd_vs_ne(sample_mask=HI_Z_MASK)
 
     # Plot sfr ms with ne colored bins
-    #plot_sfr_vs_mass_vs_ne(sample_mask=LO_Z_MASK)
-    #plot_sfr_vs_mass_vs_ne(sample_mask=HI_Z_MASK)
+    plot_sfr_vs_mass_vs_ne(sample_mask=LO_Z_MASK)
+    plot_sfr_vs_mass_vs_ne(sample_mask=HI_Z_MASK)
 
     # Plot sfrsd vs mass with ne colored bins
-    plot_sfrsd_vs_mass_vs_ne(sample_mask=LO_Z_MASK)
-    plot_sfrsd_vs_mass_vs_ne(sample_mask=HI_Z_MASK)
+    #plot_sfrsd_vs_mass_vs_ne(sample_mask=LO_Z_MASK)
+    #plot_sfrsd_vs_mass_vs_ne(sample_mask=HI_Z_MASK)
 
     # Plot SFRSD vs ne evolution in different bins
-    #plot_ne_vs_sfrsd_binned(sample_mask=LO_Z_MASK)
-    #plot_ne_vs_sfrsd_binned(sample_mask=HI_Z_MASK)
+    plot_ne_vs_sfrsd_binned(sample_mask=LO_Z_MASK)
+    plot_ne_vs_sfrsd_binned(sample_mask=HI_Z_MASK)
 
     # Plot BPT diagram color-coded by median ne
     plot_bpt_ne_color(sample_mask=LO_Z_MASK)
@@ -3077,8 +3104,8 @@ def generate_all_plots_for_paper():
     bpt_ks_tests()
 
     # Plot metallicity properties
-    #metallicity(sample_mask=LO_Z_MASK)
-    #metallicity(sample_mask=HI_Z_MASK)
+    metallicity(sample_mask=LO_Z_MASK)
+    metallicity(sample_mask=HI_Z_MASK)
 
     # Plot SFRSD figures
     # I'm not sure these are meaningful or correct. Didn't bother to fix yet.
@@ -3101,8 +3128,8 @@ def generate_chosen_plots():
     #plot_redshift_vs_ne(sample_mask=HI_Z_MASK)
     #plot_ne_distribution(sample_mask=LO_Z_MASK)
     #plot_ne_distribution(sample_mask=HI_Z_MASK)
-    plot_mass_sfr_sfrsd_vs_ne(sample_mask=LO_Z_MASK)
-    plot_mass_sfr_sfrsd_vs_ne(sample_mask=HI_Z_MASK)
+    #plot_mass_sfr_sfrsd_vs_ne(sample_mask=LO_Z_MASK)
+    #plot_mass_sfr_sfrsd_vs_ne(sample_mask=HI_Z_MASK)
     #histogram_plots()
     #plot_sfr_vs_mass_vs_ne(sample_mask=LO_Z_MASK)
     #plot_sfr_vs_mass_vs_ne(sample_mask=HI_Z_MASK)
@@ -3119,8 +3146,6 @@ def generate_chosen_plots():
     #plot_redshift_vs_mass_sfr()
     #plot_redshift_vs_ne(sample_mask=LO_Z_MASK)
     #plot_redshift_vs_ne(sample_mask=HI_Z_MASK)
-
-    #histogram_plots()
 
     pass
 
@@ -3139,10 +3164,10 @@ def main():
     NE_LINE_SOURCE = 0 # 0 for both, 1 for oii, 2 for sii
     Q = 7.5
 
-    #generate_all_plots_for_paper()
+    generate_all_plots_for_paper()
     #generate_plots_for_proposal()
 
-    generate_chosen_plots()
+    #generate_chosen_plots()
 
 
 if __name__ == '__main__':
